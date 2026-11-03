@@ -69,7 +69,7 @@
   #map{flex:1}
   .auto{background:var(--navy-soft)}
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
 <body>
 <div class="demo" id="demoBar" style="display:none">見本版：入力した内容はこのスマホの中だけに保存されます（ほかの人には見えません）</div>
@@ -420,7 +420,7 @@ let leafletLoading = null;
 function loadLeaflet(){
   if(window.L) return Promise.resolve();
   return leafletLoading ||= new Promise((ok, ng) => { const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'; s.onload = ok; s.onerror = ng; document.head.appendChild(s); });
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'; s.integrity = 'sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g=='; s.crossOrigin = 'anonymous'; s.onload = ok; s.onerror = ng; document.head.appendChild(s); });
 }
 async function gpsMap(key){
   const input = document.querySelector(`[data-k="${key}"]`);
