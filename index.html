@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="noindex,nofollow">
 <title>トレサ記録（見本）</title>
 <style>
   :root{
@@ -58,7 +58,18 @@
   .checks input{width:auto}
   h2{font-size:17px;margin:0 0 4px}
   .demo{font-size:12px;background:var(--gold);color:#3a2a08;text-align:center;padding:3px}
+  .mini{display:flex;gap:6px;margin-top:6px}
+  .mini button{flex:1;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--navy-soft);color:var(--navy);font-size:14px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:flex;flex-direction:column;padding:12px}
+  .modal .box{background:var(--card);border-radius:12px;flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .modal .bar{display:flex;gap:8px;padding:10px;align-items:center}
+  .modal .bar span{flex:1;font-size:13px;color:var(--sub)}
+  .modal .bar button{padding:8px 14px;border:0;border-radius:8px;background:var(--navy);color:#fff;font-size:15px}
+  .modal .bar button.sub{background:var(--navy-soft);color:var(--navy)}
+  #map{flex:1}
+  .auto{background:var(--navy-soft)}
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 </head>
 <body>
 <div class="demo" id="demoBar" style="display:none">見本版：入力した内容はこのスマホの中だけに保存されます（ほかの人には見えません）</div>
@@ -70,6 +81,7 @@
 <nav>
   <button id="tabInput" class="on" onclick="go('input')">入力</button>
   <button id="tabList" onclick="go('list')">一覧</button>
+  <button id="tabStaff" onclick="go('staff')">担当者</button>
 </nav>
 <main id="main"></main>
 <div class="toast" id="toast"></div>
@@ -80,31 +92,46 @@
    このMacで開いたときは、ブラウザの中だけで動く「お試し用」を使う。 */
 const IS_GAS = typeof google !== 'undefined' && google.script && google.script.run;
 
+/* 島（頭文字＝個体番号の先頭・耳票の色・地図の中心） 小宝島には野生化トカラヤギはいない */
+const ISLANDS = [
+  {name:'口之島', code:'口', tag:'', lat:29.97, lng:129.92},
+  {name:'中之島', code:'中', tag:'黄', lat:29.85, lng:129.86},
+  {name:'平島', code:'平', tag:'', lat:29.69, lng:129.53},
+  {name:'諏訪之瀬島', code:'諏', tag:'', lat:29.62, lng:129.71},
+  {name:'悪石島', code:'悪', tag:'', lat:29.46, lng:129.60},
+  {name:'宝島', code:'宝', tag:'', lat:29.15, lng:129.21}
+];
+const AGES = ['1歳','2歳','3歳','4歳','不明'];
+/* auto：入力する人の登録情報などから自動で入る（あとで書き換えも可）
+   name=担当者名／island・farm・plant・processor・seller=担当者の登録内容／fixed=決まった値 */
 const MOCK_CONFIG = {
-  appName: '見本（ダミーデータ）',
-  staff: ['捕獲担当', '牧場担当', '加工担当'],
+  appName: '見本（データはテスト用）',
   stages: [
     { id:'s1', no:'1・2', name:'捕獲・搬出', owner:'捕獲担当', target:'animal', fields:[
       {key:'photo', label:'個体の写真', type:'photo'},
-      {key:'sex', label:'性別', type:'select', options:['オス','メス','不明']},
-      {key:'age', label:'推定年齢', type:'text', hint:'例：2歳くらい'},
+      {key:'sex', label:'性別', type:'select', options:['オス','メス']},
+      {key:'age', label:'推定年齢', type:'select', options:AGES, hint:'不明のときは受入で歯の写真とダブルチェック。推定できなければ等外'},
       {key:'feature', label:'毛色・身体的特徴', type:'textarea'},
-      {key:'island', label:'捕獲地域（十島村内）', type:'select', options:['口之島','中之島','平島','諏訪之瀬島','悪石島','小宝島','宝島','その他']},
-      {key:'spot', label:'捕獲地点', type:'text'},
+      {key:'island', label:'捕獲地域（十島村内）', type:'island', auto:'island'},
+      {key:'tag', label:'耳票の色', type:'text', auto:'tag'},
+      {key:'spot', label:'捕獲地点（GPS）', type:'gps'},
       {key:'capDate', label:'捕獲日', type:'date'},
       {key:'tickDrug', label:'使用ダニ駆除剤名', type:'text'},
       {key:'tickDate', label:'ダニ駆除剤塗布日', type:'date'},
-      {key:'catcher', label:'捕獲者', type:'text'},
+      {key:'catcher', label:'捕獲者', type:'text', auto:'name'},
       {key:'capHealth', label:'捕獲時の健康状態', type:'textarea'},
       {key:'outDate', label:'搬出日', type:'date'},
-      {key:'outFromTo', label:'搬出元・搬出先', type:'text', hint:'例：中之島 → 奄美（（牧場名））'},
-      {key:'receiver', label:'引き受け担当者', type:'text'}
+      {key:'outFrom', label:'搬出元', type:'text', auto:'outFrom'},
+      {key:'outTo', label:'搬出先', type:'text', auto:'fixed', value:'奄美大島'},
+      {key:'receiver', label:'引き受け担当者', type:'staff'}
     ]},
     { id:'s3', no:'3', name:'受入・飼養', owner:'受入・飼養担当', target:'animal', fields:[
-      {key:'farm', label:'飼養施設・管理者', type:'text'},
+      {key:'farm', label:'飼養施設・管理者', type:'text', auto:'farm'},
       {key:'inDate', label:'導入日', type:'date'},
       {key:'inWeight', label:'導入時体重（kg）', type:'number'},
       {key:'inHealth', label:'飼養開始時の健康状態', type:'textarea'},
+      {key:'teeth', label:'歯列の写真', type:'photo'},
+      {key:'ageCheck', label:'推定年齢（受入時のダブルチェック）', type:'select', options:AGES},
       {key:'feed', label:'飼料・給餌内容', type:'textarea'},
       {key:'medic', label:'投薬・治療履歴', type:'textarea'},
       {key:'method', label:'飼養環境・飼育方法', type:'textarea'}
@@ -112,20 +139,20 @@ const MOCK_CONFIG = {
     { id:'s4', no:'4', name:'出荷・と畜', owner:'屠畜場担当', target:'animal', fields:[
       {key:'shipWeight', label:'出荷時体重（kg）', type:'number'},
       {key:'shipDate', label:'出荷日', type:'date'},
-      {key:'plant', label:'食肉処理施設名', type:'text'},
+      {key:'plant', label:'食肉処理施設名', type:'text', auto:'plant'},
       {key:'slRecord', label:'と畜・解体に関する管理記録', type:'textarea'},
       {key:'inspect', label:'食肉検査等の記録', type:'textarea'},
       {key:'carcass', label:'枝肉重量（kg）', type:'number'},
-      {key:'handler', label:'処理担当者', type:'text'}
+      {key:'handler', label:'処理担当者', type:'text', auto:'name'}
     ]},
     { id:'s5', no:'5', name:'精肉・品質', owner:'精肉担当', target:'animal', fields:[
-      {key:'grade', label:'商品区分', type:'select', options:['香級','清級','等外']},
+      {key:'grade', label:'商品区分', type:'select', options:['香級','清級','等外'], auto:'grade'},
       {key:'storage', label:'熟成・保存条件', type:'textarea'},
       {key:'quality', label:'品質検査記録', type:'textarea'}
     ]},
     { id:'s6', no:'6', name:'加工・製造', owner:'加工担当', target:'lot', fields:[
-      {key:'maker', label:'加工事業者', type:'text'},
-      {key:'facility', label:'製造施設', type:'text'},
+      {key:'maker', label:'加工事業者', type:'text', auto:'processor'},
+      {key:'facility', label:'製造施設', type:'text', auto:'processor'},
       {key:'procDate', label:'加工日', type:'date'},
       {key:'product', label:'加工品名', type:'text', hint:'例：島ヤギ皮ジャーキー'},
       {key:'rawQty', label:'原材料使用量', type:'text'},
@@ -136,6 +163,7 @@ const MOCK_CONFIG = {
       {key:'labelText', label:'商品ラベル・表示内容', type:'textarea'}
     ]},
     { id:'s7', no:'7', name:'販売', owner:'販売元', target:'sale', fields:[
+      {key:'seller', label:'販売元', type:'text', auto:'seller'},
       {key:'shipDate', label:'出荷日', type:'date'},
       {key:'shipQty', label:'出荷数量', type:'number'},
       {key:'buyer', label:'販売先・納品先', type:'text'},
@@ -145,27 +173,39 @@ const MOCK_CONFIG = {
     ]}
   ]
 };
+/* 担当者の登録項目 */
+const STAFF_FIELDS = [
+  {key:'name', label:'名前'}, {key:'island', label:'捕獲地域', type:'island'},
+  {key:'farm', label:'牧場名'}, {key:'plant', label:'屠畜場名'},
+  {key:'processor', label:'加工場名'}, {key:'seller', label:'販売元名'}
+];
 
 function mockSeed(){
   const t = '2026-11-03T10:00:00';
+  const M = '美延 優志', S = '白石 聡';
   return {
-    animals:['A001','A002','A003'],
-    records:[
-      {target:'animal',id:'A001',stage:'s1',by:'捕獲担当',at:t,data:{sex:'オス',age:'3歳くらい',feature:'茶色・右角が短い',island:'中之島',spot:'（ダミー）',capDate:'2026-09-20',catcher:'捕獲担当',capHealth:'良好',outDate:'2026-09-25',outFromTo:'中之島 → 奄美（（牧場名））',receiver:'牧場担当'}},
-      {target:'animal',id:'A001',stage:'s3',by:'牧場担当',at:t,data:{farm:'（牧場名）・牧場担当',inDate:'2026-09-26',inWeight:'18',inHealth:'良好',feed:'島の野草・干し草',medic:'なし',method:'放牧＋天然草'}},
-      {target:'animal',id:'A001',stage:'s4',by:'牧場担当',at:t,data:{shipWeight:'24',shipDate:'2026-10-28',plant:'（ダミー）食肉センター',carcass:'11',handler:'牧場担当'}},
-      {target:'animal',id:'A001',stage:'s5',by:'牧場担当',at:t,data:{grade:'清級',storage:'冷凍 -20℃'}},
-      {target:'animal',id:'A002',stage:'s1',by:'捕獲担当',at:t,data:{sex:'メス',island:'中之島',capDate:'2026-10-05',catcher:'捕獲担当',outDate:'2026-10-10',outFromTo:'中之島 → 奄美（（牧場名））'}},
-      {target:'animal',id:'A002',stage:'s3',by:'牧場担当',at:t,data:{farm:'（牧場名）・牧場担当',inDate:'2026-10-11',inWeight:'15'}},
-      {target:'animal',id:'A003',stage:'s1',by:'捕獲担当',at:t,data:{sex:'オス',island:'中之島',capDate:'2026-10-30'}},
-      {target:'lot',id:'A001-1',stage:'s6',by:'牧場担当',at:t,data:{maker:'（牧場名）',procDate:'2026-10-30',product:'島ヤギ皮ジャーキー',qty:'40',expiry:'2027-04-30',keep:'常温・直射日光を避ける'}},
-      {target:'sale',id:'A001-1',stage:'s7',by:'牧場担当',at:t,data:{shipDate:'2026-11-01',shipQty:'10',buyer:'（ダミー）島内スーパー',saleDate:'2026-11-01',saleQty:'10',form:'店舗陳列'}}
+    staff:[
+      {name:M, island:'中之島', farm:'', plant:'', processor:'', seller:''},
+      {name:S, island:'', farm:'サティ牧場', plant:'小湊屠畜場', processor:'らいおんの穴', seller:'らいおんのアナ'}
     ],
-    lots:[{lot:'A001-1',animals:['A001'],at:t}]
+    animals:['中A001','中A002','中A003'],
+    records:[
+      {target:'animal',id:'中A001',stage:'s1',by:M,at:t,data:{sex:'オス',age:'3歳',feature:'茶色・右角が短い',island:'中之島',tag:'黄',spot:'29.8512, 129.8601',capDate:'2026-09-20',tickDrug:'（ダミー）',tickDate:'2026-09-21',catcher:M,capHealth:'良好',outDate:'2026-09-25',outFrom:'中之島',outTo:'奄美大島',receiver:S}},
+      {target:'animal',id:'中A001',stage:'s3',by:S,at:t,data:{farm:'サティ牧場・'+S,inDate:'2026-09-26',inWeight:'18',inHealth:'良好',ageCheck:'3歳',feed:'島の野草・干し草',medic:'なし',method:'放牧＋天然草'}},
+      {target:'animal',id:'中A001',stage:'s4',by:S,at:t,data:{shipWeight:'24',shipDate:'2026-10-28',plant:'小湊屠畜場',carcass:'11',handler:S}},
+      {target:'animal',id:'中A001',stage:'s5',by:S,at:t,data:{grade:'清級',storage:'冷凍 -20℃'}},
+      {target:'animal',id:'中A002',stage:'s1',by:M,at:t,data:{sex:'メス',age:'不明',island:'中之島',tag:'黄',capDate:'2026-10-05',catcher:M,outDate:'2026-10-10',outFrom:'中之島',outTo:'奄美大島',receiver:S}},
+      {target:'animal',id:'中A002',stage:'s3',by:S,at:t,data:{farm:'サティ牧場・'+S,inDate:'2026-10-11',inWeight:'15',ageCheck:'不明'}},
+      {target:'animal',id:'中A003',stage:'s1',by:M,at:t,data:{sex:'オス',age:'2歳',island:'中之島',tag:'黄',capDate:'2026-10-30'}},
+      {target:'lot',id:'中A001-1',stage:'s6',by:S,at:t,data:{maker:'らいおんの穴',facility:'らいおんの穴',procDate:'2026-10-30',product:'島ヤギ皮ジャーキー',qty:'40',expiry:'2027-04-30',keep:'常温・直射日光を避ける'}},
+      {target:'sale',id:'中A001-1',stage:'s7',by:S,at:t,data:{seller:'らいおんのアナ',shipDate:'2026-11-01',shipQty:'10',buyer:'（ダミー）島内スーパー',saleDate:'2026-11-01',saleQty:'10',form:'店舗陳列'}}
+    ],
+    lots:[{lot:'中A001-1',animals:['中A001'],at:t}]
   };
 }
-function mockLoad(){ try{ const s = localStorage.getItem('tresa_demo'); if(s) return JSON.parse(s); }catch(e){} return mockSeed(); }
-function mockSave(db){ try{ localStorage.setItem('tresa_demo', JSON.stringify(db)); }catch(e){} }
+const MOCK_KEY = 'tresa_mock_v2', WHO_KEY = 'tresa_who_v2';
+function mockLoad(){ try{ const s = localStorage.getItem(MOCK_KEY); if(s) return JSON.parse(s); }catch(e){} return mockSeed(); }
+function mockSave(db){ try{ localStorage.setItem(MOCK_KEY, JSON.stringify(db)); }catch(e){} }
 
 const api = {
   call(fn, ...args){
@@ -180,10 +220,11 @@ const mock = {
   getAll(){ return mockLoad(); },
   addAnimal(id){ const db = mockLoad(); if(!db.animals.includes(id)) db.animals.push(id); mockSave(db); return id; },
   saveRecord(rec){ const db = mockLoad(); rec.at = new Date().toISOString(); db.records.push(rec); mockSave(db); return true; },
+  saveStaff(list){ const db = mockLoad(); db.staff = list; mockSave(db); return true; },
   createLot(animals){ const db = mockLoad(); const base = animals[0];
     const n = db.lots.filter(l => l.lot.startsWith(base + '-')).length + 1;
     const lot = base + '-' + n; db.lots.push({lot, animals, at:new Date().toISOString()}); mockSave(db); return lot; },
-  reset(){ try{ localStorage.removeItem('tresa_demo'); }catch(e){} return true; }
+  reset(){ try{ localStorage.removeItem(MOCK_KEY); }catch(e){} return true; }
 };
 
 /* ===================== 画面 ===================== */
@@ -192,6 +233,9 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 1800); }
 const stageOf = id => CFG.stages.find(s => s.id === id);
+const islandOf = name => ISLANDS.find(i => i.name === name);
+const islandByCode = code => ISLANDS.find(i => i.code === code);
+const me = () => (DB.staff || []).find(s => s.name === $('#who').value) || null;
 
 function latest(target, id, stage){
   const rs = DB.records.filter(r => r.target === target && r.id === id && r.stage === stage);
@@ -199,11 +243,17 @@ function latest(target, id, stage){
   const merged = {}; rs.forEach(r => Object.assign(merged, r.data)); // 後から入れた値で上書き
   return {data: merged, by: rs[rs.length-1].by, at: rs[rs.length-1].at};
 }
-function nextAnimalId(){
-  // A001〜A100 → B001〜
+// 個体番号＝島の頭文字＋アルファベット＋番号（中A001〜中A100 → 中B001〜）。島ごとに連番
+function nextAnimalId(code){
   let max = -1;
-  DB.animals.forEach(id => { const m = /^([A-Z])(\d{3})$/.exec(id); if(m){ const v = (m[1].charCodeAt(0)-65)*100 + (+m[2]-1); if(v > max) max = v; } });
-  const v = max + 1; return String.fromCharCode(65 + Math.floor(v/100)) + String(v%100 + 1).padStart(3,'0');
+  DB.animals.forEach(id => { const m = /^(.)([A-Z])(\d{3})$/.exec(id); if(m && m[1] === code){ const v = (m[2].charCodeAt(0)-65)*100 + (+m[3]-1); if(v > max) max = v; } });
+  const v = max + 1; return code + String.fromCharCode(65 + Math.floor(v/100)) + String(v%100 + 1).padStart(3,'0');
+}
+// 年齢が推定できない個体（捕獲時も受入時も「不明」または未入力で、どちらかが不明）は等外
+function ageUnknown(a){
+  const s1 = latest('animal', a, 's1')?.data || {}, s3 = latest('animal', a, 's3')?.data || {};
+  const known = v => v && v !== '不明';
+  return !known(s3.ageCheck) && !known(s1.age) && (s1.age === '不明' || s3.ageCheck === '不明');
 }
 
 async function boot(){
@@ -211,14 +261,19 @@ async function boot(){
   CFG = await api.call('getConfig');
   DB = clean(await api.call('getAll'));
   $('#brand').textContent = CFG.appName;
-  let saved = ''; try{ saved = localStorage.getItem('tresa_who') || ''; }catch(e){}
-  $('#who').innerHTML = '<option value="">選んでください</option>' + CFG.staff.map(s => `<option ${s===saved?'selected':''}>${esc(s)}</option>`).join('');
-  $('#who').onchange = e => { try{ localStorage.setItem('tresa_who', e.target.value); }catch(_){} };
+  drawWho();
+  $('#who').onchange = e => { try{ localStorage.setItem(WHO_KEY, e.target.value); }catch(_){} };
   go('input');
 }
-// 番号は決まった形（A001／A001-1）だけを通す（画面にそのまま埋め込むため）
-const ID_OK = /^[A-Z]\d{3}(-\d+)?$/;
+function drawWho(){
+  let saved = ''; try{ saved = localStorage.getItem(WHO_KEY) || ''; }catch(e){}
+  if($('#who').value) saved = $('#who').value;
+  $('#who').innerHTML = '<option value="">選んでください</option>' + (DB.staff || []).map(s => `<option ${s.name===saved?'selected':''}>${esc(s.name)}</option>`).join('');
+}
+// 番号は決まった形（中A001／中A001-1）だけを通す（画面にそのまま埋め込むため）
+const ID_OK = /^[口中平諏悪宝][A-Z]\d{3}(-\d+)?$/;
 function clean(db){
+  db.staff = (db.staff || []).filter(s => s && s.name);
   db.animals = (db.animals || []).filter(a => ID_OK.test(a));
   db.lots = (db.lots || []).filter(l => ID_OK.test(l.lot)).map(l => ({...l, animals: (l.animals || []).filter(a => ID_OK.test(a))}));
   db.records = (db.records || []).filter(r => ID_OK.test(r.id) && /^s\d+$/.test(r.stage));
@@ -228,8 +283,8 @@ async function refresh(){ DB = clean(await api.call('getAll')); }
 function who(){ const w = $('#who').value; if(!w){ toast('上で「入力する人」を選んでください'); } return w; }
 
 function go(v){
-  VIEW = v; $('#tabInput').classList.toggle('on', v==='input'); $('#tabList').classList.toggle('on', v==='list');
-  v === 'input' ? showStages() : showList();
+  VIEW = v; ['input','list','staff'].forEach(k => $('#tab' + k[0].toUpperCase() + k.slice(1)).classList.toggle('on', v===k));
+  v === 'input' ? showStages() : v === 'list' ? showList() : showStaff();
   window.scrollTo(0,0);
 }
 
@@ -238,13 +293,16 @@ function showStages(){
   $('#main').innerHTML = `<p class="muted">自分の担当の区分を選んでください</p><div class="stages">` +
     CFG.stages.map(s => `<button class="stage" onclick="pickTarget('${s.id}')"><span class="num">${esc(s.no)}</span><b>${esc(s.name)}</b><small>${esc(s.owner)}</small></button>`).join('') + `</div>`;
 }
+function islandSelect(id, val, extra){
+  return `<select id="${id}" ${extra || ''}><option value=""></option>` + ISLANDS.map(i => `<option ${i.name===val?'selected':''}>${i.name}</option>`).join('') + `</select>`;
+}
 function pickTarget(stageId){
   const s = stageOf(stageId);
   let body = `<button class="back" onclick="go('input')">← 区分を選び直す</button><div class="card"><h2>${esc(s.no)}. ${esc(s.name)}</h2>`;
   if(s.target === 'animal'){
-    body += `<label>個体管理番号</label><select id="pick">` + DB.animals.slice().reverse().map(a => `<option>${a}</option>`).join('') + `</select>`;
-    if(s.id === 's1') body += `<button class="btn sub" onclick="newAnimal()">＋ 新しい個体（${nextAnimalId()}）を登録</button>`;
-    body += `<button class="btn" onclick="openForm('${s.id}', $('#pick').value)">この個体を入力する</button>`;
+    body += DB.animals.length ? `<label>個体管理番号</label><select id="pick">` + DB.animals.slice().reverse().map(a => `<option>${a}</option>`).join('') + `</select>
+      <button class="btn" onclick="openForm('${s.id}', $('#pick').value)">この個体を入力する</button>` : '<p class="note">まだ個体が登録されていません</p>';
+    if(s.id === 's1') body += `<label>新しい個体の捕獲地域（番号の頭文字になります）</label>${islandSelect('newIsland', me()?.island || '', 'onchange="drawNewBtn()"')}<div id="newBtn"></div>`;
   } else if(s.target === 'lot'){
     const ready = DB.animals.filter(a => latest('animal', a, 's4'));
     body += `<p class="muted">新しく製造ロットを作るときは、使う個体を選んでください（ふつうは1頭）。<br>製造ロット番号は「個体番号-連番」で自動でつきます。</p><div class="checks">` +
@@ -256,10 +314,16 @@ function pickTarget(stageId){
       : '<p class="note">まだ製造ロットがありません（先に「加工・製造」で作ってください）</p>';
   }
   $('#main').innerHTML = body + '</div>';
+  if(s.id === 's1') drawNewBtn();
+}
+function drawNewBtn(){
+  const isl = islandOf($('#newIsland').value);
+  $('#newBtn').innerHTML = isl ? `<button class="btn sub" onclick="newAnimal()">＋ 新しい個体（${nextAnimalId(isl.code)}）を登録</button>` : '<p class="muted">島を選ぶと番号が決まります</p>';
 }
 async function newAnimal(){
   if(!who()) return;
-  const id = nextAnimalId(); await api.call('addAnimal', id); await refresh();
+  const isl = islandOf($('#newIsland').value); if(!isl){ toast('捕獲地域を選んでください'); return; }
+  const id = nextAnimalId(isl.code); await api.call('addAnimal', id); await refresh();
   toast(id + ' を登録しました'); openForm('s1', id);
 }
 async function makeLot(){
@@ -269,24 +333,57 @@ async function makeLot(){
   const lot = await api.call('createLot', picked); await refresh();
   toast('ロット ' + lot + ' を作りました'); openForm('s6', lot);
 }
-function fieldHtml(f, val){
-  const v = esc(val || '');
-  if(f.type === 'select') return `<select data-k="${f.key}"><option value=""></option>` + f.options.map(o => `<option ${o===val?'selected':''}>${esc(o)}</option>`).join('') + `</select>`;
-  if(f.type === 'textarea') return `<textarea data-k="${f.key}">${v}</textarea>`;
-  if(f.type === 'photo') return `<input type="file" accept="image/*" capture="environment" data-k="${f.key}" data-photo="1">` + (val ? `<img class="photo" src="${v}">` : '');
+// 自動で入れる値（前回の入力がないときだけ使う）
+function autoVal(f, id){
+  const p = me() || {};
+  const isl = islandByCode(String(id)[0]);
+  switch(f.auto){
+    case 'name': return p.name || '';
+    case 'island': return isl ? isl.name : (p.island || '');
+    case 'tag': return isl ? isl.tag : '';
+    case 'outFrom': return isl ? isl.name : '';
+    case 'fixed': return f.value || '';
+    case 'farm': return p.farm ? p.farm + '・' + p.name : '';
+    case 'plant': case 'processor': case 'seller': return p[f.auto] || '';
+    case 'grade': return ageUnknown(id) ? '等外' : '';
+  }
+  return '';
+}
+function fieldHtml(f, val, isAuto){
+  const v = esc(val || ''); const cls = isAuto && val ? ' class="auto"' : '';
+  const hint = f.hint ? `<div class="muted">${esc(f.hint)}</div>` : '';
+  if(f.type === 'select') return `<select data-k="${f.key}"${cls}><option value=""></option>` + f.options.map(o => `<option ${o===val?'selected':''}>${esc(o)}</option>`).join('') + `</select>` + hint;
+  if(f.type === 'island') return islandSelect('f_' + f.key, val, `data-k="${f.key}"${cls} onchange="islandChanged(this.value)"`);
+  if(f.type === 'staff') return `<select data-k="${f.key}"><option value=""></option>` + (DB.staff || []).map(s => `<option ${s.name===val?'selected':''}>${esc(s.name)}</option>`).join('') + `</select>`;
+  if(f.type === 'textarea') return `<textarea data-k="${f.key}"${cls}>${v}</textarea>` + hint;
+  if(f.type === 'photo') return `<input type="file" accept="image/*" data-k="${f.key}" data-photo="1"><div class="muted">カメラで撮る・保存してある写真から選ぶ、のどちらでもOK</div>` + (val ? `<img class="photo" src="${v}">` : '');
+  if(f.type === 'gps') return `<input type="text" data-k="${f.key}" value="${v}" placeholder="例：29.8512, 129.8601" inputmode="decimal">
+    <div class="mini"><button type="button" onclick="gpsHere('${f.key}')">📍 今いる場所</button><button type="button" onclick="gpsMap('${f.key}')">🗺 地図で選ぶ</button></div>`;
   const t = f.type === 'number' ? 'number" inputmode="decimal' : f.type;
-  return `<input type="${t}" data-k="${f.key}" value="${v}" placeholder="${esc(f.hint || '')}">`;
+  return `<input type="${t}" data-k="${f.key}" value="${v}"${cls} placeholder="${esc(f.hint || '')}">`;
+}
+function islandChanged(name){
+  const isl = islandOf(name); if(!isl) return;
+  const set = (k, v) => { const el = document.querySelector(`[data-k="${k}"]`); if(el){ el.value = v; el.classList.add('auto'); } };
+  set('tag', isl.tag); set('outFrom', isl.name);
 }
 function openForm(stageId, id){
   if(!id){ toast('番号を選んでください'); return; }
+  if(!$('#who').value) toast('「入力する人」を選ぶと、担当者の情報が自動で入ります');
   const s = stageOf(stageId);
   const target = s.target; const prev = latest(target, id, stageId);
   let extra = '';
   if(target === 'lot'){ const l = DB.lots.find(x => x.lot === id); extra = `<p class="muted">使った個体：${esc(l?.animals.join('・'))}</p>`; }
+  if(stageId === 's5' && ageUnknown(id)) extra = `<p class="note">年齢が推定できていない個体なので「等外」扱いです</p>`;
+  const fields = s.fields.map(f => {
+    const has = prev && prev.data[f.key] != null && prev.data[f.key] !== '';
+    const val = has ? prev.data[f.key] : (f.auto ? autoVal(f, id) : '');
+    return `<label>${esc(f.label)}${f.auto && !has && val ? '<span class="muted">（自動）</span>' : ''}</label>${fieldHtml(f, val, f.auto && !has)}`;
+  }).join('');
   $('#main').innerHTML = `<button class="back" onclick="pickTarget('${stageId}')">← 戻る</button>
     <div class="card"><h2>${esc(id)}｜${esc(s.name)}</h2>${extra}
     ${prev ? `<p class="muted">前回の入力：${esc(prev.by)}（${esc(String(prev.at).slice(0,10))}）。直したい所だけ書き換えて保存できます。</p>` : ''}
-    ${s.fields.map(f => `<label>${esc(f.label)}</label>${fieldHtml(f, prev?.data[f.key])}`).join('')}
+    ${fields}
     <button class="btn" onclick="saveForm('${stageId}','${esc(id)}')">保存する</button></div>`;
 }
 function readPhoto(file){
@@ -304,9 +401,63 @@ async function saveForm(stageId, id){
     if(el.dataset.photo){ if(el.files[0]) data[el.dataset.k] = await readPhoto(el.files[0]); continue; }
     if(el.value !== '') data[el.dataset.k] = el.value;
   }
+  if(data.spot && !GPS_OK.test(data.spot)){ toast('捕獲地点は「緯度, 経度」の形で入れてください'); return; }
   if(!Object.keys(data).length){ toast('何も入力されていません'); return; }
   await api.call('saveRecord', {target: s.target, id, stage: stageId, by, data});
   await refresh(); toast('保存しました'); go('input');
+}
+
+/* ---- 捕獲地点（GPS） ---- */
+const GPS_OK = /^-?\d{1,2}\.\d+, ?-?\d{1,3}\.\d+$/;
+const fmt = (lat, lng) => lat.toFixed(5) + ', ' + lng.toFixed(5);
+function gpsHere(key){
+  if(!navigator.geolocation){ toast('この端末では位置が取れません'); return; }
+  toast('位置を取得中…');
+  navigator.geolocation.getCurrentPosition(p => { document.querySelector(`[data-k="${key}"]`).value = fmt(p.coords.latitude, p.coords.longitude); toast('今いる場所を入れました'); },
+    () => toast('位置が取れませんでした（位置情報の許可を確認してください）'), {enableHighAccuracy:true, timeout:15000});
+}
+let leafletLoading = null;
+function loadLeaflet(){
+  if(window.L) return Promise.resolve();
+  return leafletLoading ||= new Promise((ok, ng) => { const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'; s.onload = ok; s.onerror = ng; document.head.appendChild(s); });
+}
+async function gpsMap(key){
+  const input = document.querySelector(`[data-k="${key}"]`);
+  try{ await loadLeaflet(); }catch(e){ toast('地図を読み込めませんでした'); return; }
+  const isl = islandOf(document.querySelector('[data-k="island"]')?.value) || ISLANDS[1];
+  let pos = GPS_OK.test(input.value) ? input.value.split(',').map(Number) : null;
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="box"><div class="bar"><span id="mapMsg">捕獲した場所を地図で押してください</span><button class="sub" id="mapNo">やめる</button><button id="mapOk">決定</button></div><div id="map"></div></div>`;
+  document.body.appendChild(m);
+  const map = L.map('map').setView(pos || [isl.lat, isl.lng], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+  let mk = pos ? L.marker(pos).addTo(map) : null;
+  map.on('click', e => { pos = [e.latlng.lat, e.latlng.lng]; mk ? mk.setLatLng(pos) : (mk = L.marker(pos).addTo(map)); $('#mapMsg').textContent = fmt(pos[0], pos[1]); });
+  $('#mapNo').onclick = () => m.remove();
+  $('#mapOk').onclick = () => { if(!pos){ toast('地図を押して場所を選んでください'); return; } input.value = fmt(pos[0], pos[1]); m.remove(); };
+}
+
+/* ---- 担当者 ---- */
+function showStaff(){
+  const list = DB.staff || [];
+  $('#main').innerHTML = `<p class="muted">担当者を登録しておくと、入力のときに捕獲地域・牧場名・屠畜場・加工場・販売元が自動で入ります。</p>` +
+    list.map((s, i) => `<div class="card item" onclick="editStaff(${i})"><div><div class="id" style="font-size:16px">${esc(s.name)}</div><div class="muted">${STAFF_FIELDS.slice(1).filter(f => s[f.key]).map(f => esc(f.label) + '：' + esc(s[f.key])).join('／') || '（登録内容なし）'}</div></div><span class="muted">›</span></div>`).join('') +
+    `<button class="btn sub" onclick="editStaff(-1)">＋ 担当者を追加</button>`;
+}
+function editStaff(i){
+  const s = i >= 0 ? DB.staff[i] : {};
+  $('#main').innerHTML = `<button class="back" onclick="go('staff')">← 担当者一覧へ</button><div class="card"><h2>${i >= 0 ? '担当者の編集' : '担当者の追加'}</h2>` +
+    STAFF_FIELDS.map(f => `<label>${esc(f.label)}</label>` + (f.type === 'island' ? islandSelect('st_' + f.key, s[f.key] || '') : `<input id="st_${f.key}" value="${esc(s[f.key] || '')}">`)).join('') +
+    `<p class="muted">分からない所・関係ない所は空欄でOK</p><button class="btn" onclick="saveStaffForm(${i})">保存する</button></div>`;
+}
+async function saveStaffForm(i){
+  const s = {}; STAFF_FIELDS.forEach(f => s[f.key] = $('#st_' + f.key).value.trim());
+  if(!s.name){ toast('名前を入れてください'); return; }
+  const list = (DB.staff || []).slice();
+  if(list.some((x, j) => x.name === s.name && j !== i)){ toast('同じ名前の担当者がいます'); return; }
+  i >= 0 ? list[i] = s : list.push(s);
+  await api.call('saveStaff', list); await refresh(); drawWho(); toast('保存しました'); go('staff');
 }
 
 /* ---- 一覧 ---- */
@@ -329,11 +480,12 @@ function drawAnimals(){
   const q = ($('#q').value || '').trim();
   const rows = DB.animals.slice().reverse().map(a => {
     const s1 = latest('animal', a, 's1')?.data || {};
-    const text = [a, s1.island, s1.sex, s1.capDate, latest('animal', a, 's5')?.data.grade].join(' ');
+    const grade = ageUnknown(a) ? '等外' : latest('animal', a, 's5')?.data.grade;
+    const text = [a, s1.island, s1.sex, s1.age, s1.capDate, grade].join(' ');
     if(q && !text.includes(q)) return '';
     const chips = CFG.stages.filter(s => s.target === 'animal').map(s => `<span class="chip ${latest('animal', a, s.id) ? 'done' : ''}">${esc(s.name)}</span>`).join('');
     const lots = DB.lots.filter(l => l.animals.includes(a)).map(l => l.lot).join('・');
-    return `<div class="card item" onclick="showAnimal('${a}')"><div><div class="id">${a}</div><div class="muted">${esc(s1.sex || '')} ${esc(s1.island || '')} ${s1.capDate ? '捕獲 ' + esc(s1.capDate) : ''}${lots ? '／ロット ' + esc(lots) : ''}</div><div class="chips">${chips}</div></div><span class="muted">›</span></div>`;
+    return `<div class="card item" onclick="showAnimal('${a}')"><div><div class="id">${a}</div><div class="muted">${esc(s1.sex || '')} ${esc(s1.age || '')} ${esc(s1.island || '')} ${s1.capDate ? '捕獲 ' + esc(s1.capDate) : ''}${grade ? '／' + esc(grade) : ''}${lots ? '／ロット ' + esc(lots) : ''}</div><div class="chips">${chips}</div></div><span class="muted">›</span></div>`;
   }).join('');
   $('#res').innerHTML = rows || '<p class="muted">見つかりません</p>';
 }
@@ -355,11 +507,16 @@ function drawSales(){
   }).join('');
   $('#res').innerHTML = rows || '<p class="muted">この月の販売記録はありません</p>';
 }
+function cell(f, v){
+  if(f.type === 'photo') return `<img class="photo" src="${esc(v)}">`;
+  if(f.type === 'gps' && GPS_OK.test(v)) return `<a href="https://www.google.com/maps?q=${encodeURIComponent(v.replace(/ /g,''))}" target="_blank" rel="noopener">${esc(v)}</a>`;
+  return esc(v);
+}
 function kv(stage, d){
-  return `<div class="kv">` + stage.fields.filter(f => d[f.key]).map(f => `<div>${esc(f.label)}</div><div>${f.type === 'photo' ? `<img class="photo" src="${esc(d[f.key])}">` : esc(d[f.key])}</div>`).join('') + `</div>`;
+  return `<div class="kv">` + stage.fields.filter(f => d[f.key]).map(f => `<div>${esc(f.label)}</div><div>${cell(f, d[f.key])}</div>`).join('') + `</div>`;
 }
 function showAnimal(a){
-  let html = `<button class="back" onclick="go('list')">← 一覧へ</button><div class="card"><h2>${a} の記録</h2></div>`;
+  let html = `<button class="back" onclick="go('list')">← 一覧へ</button><div class="card"><h2>${a} の記録</h2>${ageUnknown(a) ? '<p class="note">年齢が推定できていないため等外扱い</p>' : ''}</div>`;
   CFG.stages.filter(s => s.target === 'animal').forEach(s => {
     const r = latest('animal', a, s.id);
     html += `<div class="card"><b>${esc(s.no)}. ${esc(s.name)}</b>${r ? `<div class="muted">${esc(r.by)}・${esc(String(r.at).slice(0,10))}</div>` + kv(s, r.data) : '<div class="muted">まだ入力されていません</div>'}</div>`;
