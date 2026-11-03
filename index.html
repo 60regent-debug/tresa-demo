@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>トレサ記録（見本）</title>
+<style>
+  :root{
+    --bg:#f6f4ef; --card:#fff; --ink:#1d2a3a; --sub:#6b7480; --line:#e2ded5;
+    --navy:#1f3d6b; --navy-soft:#e7edf6; --gold:#d6a24a; --ok:#2f7d4f; --ok-soft:#e5f3ea; --warn:#b4532a;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#14181e; --card:#1d232b; --ink:#e8ecf1; --sub:#9aa4b0; --line:#2c343e;
+      --navy:#8fb1e6; --navy-soft:#22324a; --gold:#e0b25e; --ok:#6fcf97; --ok-soft:#1f3a2b; --warn:#e8916b; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:16px;line-height:1.5}
+  header{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;padding:10px 16px}
+  @media (prefers-color-scheme: dark){ header{background:#1a2b45} }
+  header h1{margin:0;font-size:17px;font-weight:700}
+  header .brand{font-size:12px;opacity:.85}
+  .who{display:flex;gap:8px;align-items:center;margin-top:6px;font-size:13px}
+  .who select{flex:1;font-size:14px;padding:4px 6px;border-radius:6px;border:0}
+  nav{display:flex;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:76px;z-index:4}
+  nav button{flex:1;padding:12px 0;border:0;background:none;font-size:15px;color:var(--sub);border-bottom:3px solid transparent}
+  nav button.on{color:var(--navy);border-bottom-color:var(--navy);font-weight:700}
+  main{max-width:640px;margin:0 auto;padding:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .stages{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:left;font-size:15px;color:var(--ink)}
+  .stage b{display:block;font-size:16px}
+  .stage small{color:var(--sub)}
+  .stage .num{display:inline-block;background:var(--navy-soft);color:var(--navy);border-radius:6px;padding:0 6px;font-size:12px;margin-bottom:4px}
+  label{display:block;font-size:13px;color:var(--sub);margin:12px 0 4px}
+  input,select,textarea{width:100%;font-size:16px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+  textarea{min-height:64px}
+  .row{display:flex;gap:8px;align-items:center}
+  .btn{display:block;width:100%;padding:13px;border:0;border-radius:10px;background:var(--navy);color:#fff;font-size:16px;font-weight:700;margin-top:16px}
+  @media (prefers-color-scheme: dark){ .btn{color:#10151c} }
+  .btn.sub{background:var(--navy-soft);color:var(--navy)}
+  .back{background:none;border:0;color:var(--navy);font-size:15px;padding:0;margin-bottom:8px}
+  .seg{display:flex;background:var(--navy-soft);border-radius:10px;padding:3px;margin-bottom:12px}
+  .seg button{flex:1;border:0;background:none;padding:8px 0;border-radius:8px;font-size:14px;color:var(--navy)}
+  .seg button.on{background:var(--card);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+  .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .chip{font-size:11px;padding:2px 7px;border-radius:999px;background:var(--line);color:var(--sub)}
+  .chip.done{background:var(--ok-soft);color:var(--ok)}
+  .item{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;cursor:pointer}
+  .item .id{font-weight:700;font-size:18px;color:var(--navy)}
+  .muted{color:var(--sub);font-size:13px}
+  .kv{display:grid;grid-template-columns:40% 60%;gap:4px 8px;font-size:14px}
+  .kv div:nth-child(odd){color:var(--sub)}
+  .photo{max-width:100%;border-radius:8px;margin-top:6px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ok);color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;display:none;z-index:9}
+  .note{font-size:12px;color:var(--warn);margin-top:4px}
+  .checks label{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:15px;margin:6px 0}
+  .checks input{width:auto}
+  h2{font-size:17px;margin:0 0 4px}
+  .demo{font-size:12px;background:var(--gold);color:#3a2a08;text-align:center;padding:3px}
+</style>
+</head>
+<body>
+<div class="demo" id="demoBar" style="display:none">見本版：入力した内容はこのスマホの中だけに保存されます（ほかの人には見えません）</div>
+<header>
+  <h1>トレサ記録</h1>
+  <div class="brand" id="brand"></div>
+  <div class="who">入力する人 <select id="who"></select></div>
+</header>
+<nav>
+  <button id="tabInput" class="on" onclick="go('input')">入力</button>
+  <button id="tabList" onclick="go('list')">一覧</button>
+</nav>
+<main id="main"></main>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== データの置き場 =====================
+   Google上では google.script.run（Code.gs）を使い、
+   このMacで開いたときは、ブラウザの中だけで動く「お試し用」を使う。 */
+const IS_GAS = typeof google !== 'undefined' && google.script && google.script.run;
+
+const MOCK_CONFIG = {
+  appName: '見本（ダミーデータ）',
+  staff: ['捕獲担当', '牧場担当', '加工担当'],
+  stages: [
+    { id:'s1', no:'1・2', name:'捕獲・搬出', owner:'捕獲担当', target:'animal', fields:[
+      {key:'photo', label:'個体の写真', type:'photo'},
+      {key:'sex', label:'性別', type:'select', options:['オス','メス','不明']},
+      {key:'age', label:'推定年齢', type:'text', hint:'例：2歳くらい'},
+      {key:'feature', label:'毛色・身体的特徴', type:'textarea'},
+      {key:'island', label:'捕獲地域（十島村内）', type:'select', options:['口之島','中之島','平島','諏訪之瀬島','悪石島','小宝島','宝島','その他']},
+      {key:'spot', label:'捕獲地点', type:'text'},
+      {key:'capDate', label:'捕獲日', type:'date'},
+      {key:'catcher', label:'捕獲者', type:'text'},
+      {key:'capHealth', label:'捕獲時の健康状態', type:'textarea'},
+      {key:'outDate', label:'搬出日', type:'date'},
+      {key:'outFromTo', label:'搬出元・搬出先', type:'text', hint:'例：中之島 → 奄美（（牧場名））'},
+      {key:'receiver', label:'引き受け担当者', type:'text'}
+    ]},
+    { id:'s3', no:'3', name:'受入・飼養', owner:'受入・飼養担当', target:'animal', fields:[
+      {key:'farm', label:'飼養施設・管理者', type:'text'},
+      {key:'inDate', label:'導入日', type:'date'},
+      {key:'inWeight', label:'導入時体重（kg）', type:'number'},
+      {key:'inHealth', label:'飼養開始時の健康状態', type:'textarea'},
+      {key:'medic', label:'投薬・治療履歴', type:'textarea'},
+      {key:'method', label:'飼養環境・飼育方法', type:'textarea'}
+    ]},
+    { id:'s4', no:'4', name:'出荷・と畜', owner:'屠畜場担当', target:'animal', fields:[
+      {key:'shipWeight', label:'出荷時体重（kg）', type:'number'},
+      {key:'shipDate', label:'出荷日', type:'date'},
+      {key:'plant', label:'食肉処理施設名', type:'text'},
+      {key:'slRecord', label:'と畜・解体に関する管理記録', type:'textarea'},
+      {key:'inspect', label:'食肉検査等の記録', type:'textarea'},
+      {key:'carcass', label:'枝肉重量（kg）', type:'number'},
+      {key:'handler', label:'処理担当者', type:'text'}
+    ]},
+    { id:'s5', no:'5', name:'精肉・品質', owner:'精肉担当', target:'animal', fields:[
+      {key:'grade', label:'商品区分', type:'select', options:['香級','清級','等外']},
+      {key:'storage', label:'熟成・保存条件', type:'textarea'},
+      {key:'quality', label:'品質検査記録', type:'textarea'}
+    ]},
+    { id:'s6', no:'6', name:'加工・製造', owner:'加工担当', target:'lot', fields:[
+      {key:'maker', label:'加工事業者', type:'text'},
+      {key:'facility', label:'製造施設', type:'text'},
+      {key:'procDate', label:'加工日', type:'date'},
+      {key:'product', label:'加工品名', type:'text', hint:'例：島ヤギ皮ジャーキー'},
+      {key:'rawQty', label:'原材料使用量', type:'text'},
+      {key:'additives', label:'添加原材料・調味料', type:'textarea'},
+      {key:'qty', label:'製造数量', type:'number'},
+      {key:'expiry', label:'賞味期限・消費期限', type:'date'},
+      {key:'keep', label:'保存方法', type:'text'},
+      {key:'labelText', label:'商品ラベル・表示内容', type:'textarea'}
+    ]},
+    { id:'s7', no:'7', name:'販売', owner:'販売元', target:'sale', fields:[
+      {key:'shipDate', label:'出荷日', type:'date'},
+      {key:'shipQty', label:'出荷数量', type:'number'},
+      {key:'buyer', label:'販売先・納品先', type:'text'},
+      {key:'saleDate', label:'販売日', type:'date'},
+      {key:'saleQty', label:'販売数量（店舗陳列数）', type:'number'},
+      {key:'form', label:'販売形態', type:'select', options:['店舗陳列','飲食店へ納品','直売','イベント出店','通販','その他']}
+    ]}
+  ]
+};
+
+function mockSeed(){
+  const t = '2026-11-03T10:00:00';
+  return {
+    animals:['A001','A002','A003'],
+    records:[
+      {target:'animal',id:'A001',stage:'s1',by:'捕獲担当',at:t,data:{sex:'オス',age:'3歳くらい',feature:'茶色・右角が短い',island:'中之島',spot:'（ダミー）',capDate:'2026-09-20',catcher:'捕獲担当',capHealth:'良好',outDate:'2026-09-25',outFromTo:'中之島 → 奄美（（牧場名））',receiver:'牧場担当'}},
+      {target:'animal',id:'A001',stage:'s3',by:'牧場担当',at:t,data:{farm:'（牧場名）・牧場担当',inDate:'2026-09-26',inWeight:'18',inHealth:'良好',medic:'なし',method:'放牧＋天然草'}},
+      {target:'animal',id:'A001',stage:'s4',by:'牧場担当',at:t,data:{shipWeight:'24',shipDate:'2026-10-28',plant:'（ダミー）食肉センター',carcass:'11',handler:'牧場担当'}},
+      {target:'animal',id:'A001',stage:'s5',by:'牧場担当',at:t,data:{grade:'清級',storage:'冷凍 -20℃'}},
+      {target:'animal',id:'A002',stage:'s1',by:'捕獲担当',at:t,data:{sex:'メス',island:'中之島',capDate:'2026-10-05',catcher:'捕獲担当',outDate:'2026-10-10',outFromTo:'中之島 → 奄美（（牧場名））'}},
+      {target:'animal',id:'A002',stage:'s3',by:'牧場担当',at:t,data:{farm:'（牧場名）・牧場担当',inDate:'2026-10-11',inWeight:'15'}},
+      {target:'animal',id:'A003',stage:'s1',by:'捕獲担当',at:t,data:{sex:'オス',island:'中之島',capDate:'2026-10-30'}},
+      {target:'lot',id:'A001-1',stage:'s6',by:'牧場担当',at:t,data:{maker:'（牧場名）',procDate:'2026-10-30',product:'島ヤギ皮ジャーキー',qty:'40',expiry:'2027-04-30',keep:'常温・直射日光を避ける'}},
+      {target:'sale',id:'A001-1',stage:'s7',by:'牧場担当',at:t,data:{shipDate:'2026-11-01',shipQty:'10',buyer:'（ダミー）島内スーパー',saleDate:'2026-11-01',saleQty:'10',form:'店舗陳列'}}
+    ],
+    lots:[{lot:'A001-1',animals:['A001'],at:t}]
+  };
+}
+function mockLoad(){ try{ const s = localStorage.getItem('tresa_demo'); if(s) return JSON.parse(s); }catch(e){} return mockSeed(); }
+function mockSave(db){ try{ localStorage.setItem('tresa_demo', JSON.stringify(db)); }catch(e){} }
+
+const api = {
+  call(fn, ...args){
+    if(IS_GAS){
+      return new Promise((ok, ng) => google.script.run.withSuccessHandler(ok).withFailureHandler(ng)[fn](...args));
+    }
+    return Promise.resolve(mock[fn](...args));
+  }
+};
+const mock = {
+  getConfig(){ return MOCK_CONFIG; },
+  getAll(){ return mockLoad(); },
+  addAnimal(id){ const db = mockLoad(); if(!db.animals.includes(id)) db.animals.push(id); mockSave(db); return id; },
+  saveRecord(rec){ const db = mockLoad(); rec.at = new Date().toISOString(); db.records.push(rec); mockSave(db); return true; },
+  createLot(animals){ const db = mockLoad(); const base = animals[0];
+    const n = db.lots.filter(l => l.lot.startsWith(base + '-')).length + 1;
+    const lot = base + '-' + n; db.lots.push({lot, animals, at:new Date().toISOString()}); mockSave(db); return lot; },
+  reset(){ try{ localStorage.removeItem('tresa_demo'); }catch(e){} return true; }
+};
+
+/* ===================== 画面 ===================== */
+let CFG = null, DB = null, VIEW = 'input', LISTMODE = 'animal';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 1800); }
+const stageOf = id => CFG.stages.find(s => s.id === id);
+
+function latest(target, id, stage){
+  const rs = DB.records.filter(r => r.target === target && r.id === id && r.stage === stage);
+  if(!rs.length) return null;
+  const merged = {}; rs.forEach(r => Object.assign(merged, r.data)); // 後から入れた値で上書き
+  return {data: merged, by: rs[rs.length-1].by, at: rs[rs.length-1].at};
+}
+function nextAnimalId(){
+  // A001〜A100 → B001〜
+  let max = -1;
+  DB.animals.forEach(id => { const m = /^([A-Z])(\d{3})$/.exec(id); if(m){ const v = (m[1].charCodeAt(0)-65)*100 + (+m[2]-1); if(v > max) max = v; } });
+  const v = max + 1; return String.fromCharCode(65 + Math.floor(v/100)) + String(v%100 + 1).padStart(3,'0');
+}
+
+async function boot(){
+  if(!IS_GAS) $('#demoBar').style.display = 'block';
+  CFG = await api.call('getConfig');
+  DB = await api.call('getAll');
+  $('#brand').textContent = CFG.appName;
+  let saved = ''; try{ saved = localStorage.getItem('tresa_who') || ''; }catch(e){}
+  $('#who').innerHTML = '<option value="">選んでください</option>' + CFG.staff.map(s => `<option ${s===saved?'selected':''}>${esc(s)}</option>`).join('');
+  $('#who').onchange = e => { try{ localStorage.setItem('tresa_who', e.target.value); }catch(_){} };
+  go('input');
+}
+async function refresh(){ DB = await api.call('getAll'); }
+function who(){ const w = $('#who').value; if(!w){ toast('上で「入力する人」を選んでください'); } return w; }
+
+function go(v){
+  VIEW = v; $('#tabInput').classList.toggle('on', v==='input'); $('#tabList').classList.toggle('on', v==='list');
+  v === 'input' ? showStages() : showList();
+  window.scrollTo(0,0);
+}
+
+/* ---- 入力 ---- */
+function showStages(){
+  $('#main').innerHTML = `<p class="muted">自分の担当の区分を選んでください</p><div class="stages">` +
+    CFG.stages.map(s => `<button class="stage" onclick="pickTarget('${s.id}')"><span class="num">${esc(s.no)}</span><b>${esc(s.name)}</b><small>${esc(s.owner)}</small></button>`).join('') + `</div>`;
+}
+function pickTarget(stageId){
+  const s = stageOf(stageId);
+  let body = `<button class="back" onclick="go('input')">← 区分を選び直す</button><div class="card"><h2>${esc(s.no)}. ${esc(s.name)}</h2>`;
+  if(s.target === 'animal'){
+    body += `<label>個体管理番号</label><select id="pick">` + DB.animals.slice().reverse().map(a => `<option>${a}</option>`).join('') + `</select>`;
+    if(s.id === 's1') body += `<button class="btn sub" onclick="newAnimal()">＋ 新しい個体（${nextAnimalId()}）を登録</button>`;
+    body += `<button class="btn" onclick="openForm('${s.id}', $('#pick').value)">この個体を入力する</button>`;
+  } else if(s.target === 'lot'){
+    const ready = DB.animals.filter(a => latest('animal', a, 's4'));
+    body += `<p class="muted">新しく製造ロットを作るときは、使う個体を選んでください（ふつうは1頭）。<br>製造ロット番号は「個体番号-連番」で自動でつきます。</p><div class="checks">` +
+      (ready.length ? ready.map(a => `<label><input type="checkbox" value="${a}"> ${a}</label>`).join('') : '<p class="note">「出荷・と畜」まで入力済みの個体がまだありません</p>') +
+      `</div><button class="btn" onclick="makeLot()">新しい製造ロットを作る</button>`;
+    if(DB.lots.length) body += `<label>作ったロットの続きを入力する</label><select id="pick">` + DB.lots.slice().reverse().map(l => `<option>${l.lot}</option>`).join('') + `</select><button class="btn sub" onclick="openForm('s6', $('#pick').value)">このロットを入力する</button>`;
+  } else {
+    body += DB.lots.length ? `<label>商品ロット番号</label><select id="pick">` + DB.lots.slice().reverse().map(l => { const p = latest('lot', l.lot, 's6'); return `<option value="${l.lot}">${l.lot}　${esc(p?.data.product || '')}</option>`; }).join('') + `</select><button class="btn" onclick="openForm('s7', $('#pick').value)">このロットの販売を記録する</button>`
+      : '<p class="note">まだ製造ロットがありません（先に「加工・製造」で作ってください）</p>';
+  }
+  $('#main').innerHTML = body + '</div>';
+}
+async function newAnimal(){
+  if(!who()) return;
+  const id = nextAnimalId(); await api.call('addAnimal', id); await refresh();
+  toast(id + ' を登録しました'); openForm('s1', id);
+}
+async function makeLot(){
+  if(!who()) return;
+  const picked = [...document.querySelectorAll('.checks input:checked')].map(i => i.value);
+  if(!picked.length){ toast('個体を選んでください'); return; }
+  const lot = await api.call('createLot', picked); await refresh();
+  toast('ロット ' + lot + ' を作りました'); openForm('s6', lot);
+}
+function fieldHtml(f, val){
+  const v = esc(val || '');
+  if(f.type === 'select') return `<select data-k="${f.key}"><option value=""></option>` + f.options.map(o => `<option ${o===val?'selected':''}>${esc(o)}</option>`).join('') + `</select>`;
+  if(f.type === 'textarea') return `<textarea data-k="${f.key}">${v}</textarea>`;
+  if(f.type === 'photo') return `<input type="file" accept="image/*" capture="environment" data-k="${f.key}" data-photo="1">` + (val ? `<img class="photo" src="${v}">` : '');
+  const t = f.type === 'number' ? 'number" inputmode="decimal' : f.type;
+  return `<input type="${t}" data-k="${f.key}" value="${v}" placeholder="${esc(f.hint || '')}">`;
+}
+function openForm(stageId, id){
+  if(!id){ toast('番号を選んでください'); return; }
+  const s = stageOf(stageId);
+  const target = s.target; const prev = latest(target, id, stageId);
+  let extra = '';
+  if(target === 'lot'){ const l = DB.lots.find(x => x.lot === id); extra = `<p class="muted">使った個体：${esc(l?.animals.join('・'))}</p>`; }
+  $('#main').innerHTML = `<button class="back" onclick="pickTarget('${stageId}')">← 戻る</button>
+    <div class="card"><h2>${esc(id)}｜${esc(s.name)}</h2>${extra}
+    ${prev ? `<p class="muted">前回の入力：${esc(prev.by)}（${esc(String(prev.at).slice(0,10))}）。直したい所だけ書き換えて保存できます。</p>` : ''}
+    ${s.fields.map(f => `<label>${esc(f.label)}</label>${fieldHtml(f, prev?.data[f.key])}`).join('')}
+    <button class="btn" onclick="saveForm('${stageId}','${esc(id)}')">保存する</button></div>`;
+}
+function readPhoto(file){
+  return new Promise(ok => {
+    const img = new Image(), r = new FileReader();
+    r.onload = () => { img.onload = () => { const c = document.createElement('canvas'); const k = Math.min(1, 800 / Math.max(img.width, img.height));
+      c.width = img.width * k; c.height = img.height * k; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', .75)); }; img.src = r.result; };
+    r.readAsDataURL(file);
+  });
+}
+async function saveForm(stageId, id){
+  const by = who(); if(!by) return;
+  const s = stageOf(stageId); const data = {};
+  for(const el of document.querySelectorAll('[data-k]')){
+    if(el.dataset.photo){ if(el.files[0]) data[el.dataset.k] = await readPhoto(el.files[0]); continue; }
+    if(el.value !== '') data[el.dataset.k] = el.value;
+  }
+  if(!Object.keys(data).length){ toast('何も入力されていません'); return; }
+  await api.call('saveRecord', {target: s.target, id, stage: stageId, by, data});
+  await refresh(); toast('保存しました'); go('input');
+}
+
+/* ---- 一覧 ---- */
+function showList(){
+  const seg = `<div class="seg">${[['animal','1頭ごと'],['lot','ロットごと'],['sale','販売時期']].map(([k,t]) => `<button class="${LISTMODE===k?'on':''}" onclick="LISTMODE='${k}';showList()">${t}</button>`).join('')}</div>`;
+  let body = '';
+  if(LISTMODE === 'animal'){
+    body = `<input id="q" placeholder="番号・島・性別などで探す" oninput="drawAnimals()"><div id="res" style="margin-top:12px"></div>`;
+    $('#main').innerHTML = seg + body; drawAnimals(); return;
+  }
+  if(LISTMODE === 'lot'){
+    body = `<input id="q" placeholder="ロット番号・商品名で探す" oninput="drawLots()"><div id="res" style="margin-top:12px"></div>`;
+    $('#main').innerHTML = seg + body; drawLots(); return;
+  }
+  const months = [...new Set(DB.records.filter(r => r.stage === 's7').map(r => (r.data.saleDate || r.data.shipDate || '').slice(0,7)).filter(Boolean))].sort().reverse();
+  body = `<select id="m" onchange="drawSales()"><option value="">すべての月</option>${months.map(m => `<option>${m}</option>`).join('')}</select><div id="res" style="margin-top:12px"></div>`;
+  $('#main').innerHTML = seg + body; drawSales();
+}
+function drawAnimals(){
+  const q = ($('#q').value || '').trim();
+  const rows = DB.animals.slice().reverse().map(a => {
+    const s1 = latest('animal', a, 's1')?.data || {};
+    const text = [a, s1.island, s1.sex, s1.capDate, latest('animal', a, 's5')?.data.grade].join(' ');
+    if(q && !text.includes(q)) return '';
+    const chips = CFG.stages.filter(s => s.target === 'animal').map(s => `<span class="chip ${latest('animal', a, s.id) ? 'done' : ''}">${esc(s.name)}</span>`).join('');
+    const lots = DB.lots.filter(l => l.animals.includes(a)).map(l => l.lot).join('・');
+    return `<div class="card item" onclick="showAnimal('${a}')"><div><div class="id">${a}</div><div class="muted">${esc(s1.sex || '')} ${esc(s1.island || '')} ${s1.capDate ? '捕獲 ' + esc(s1.capDate) : ''}${lots ? '／ロット ' + esc(lots) : ''}</div><div class="chips">${chips}</div></div><span class="muted">›</span></div>`;
+  }).join('');
+  $('#res').innerHTML = rows || '<p class="muted">見つかりません</p>';
+}
+function drawLots(){
+  const q = ($('#q').value || '').trim();
+  const rows = DB.lots.slice().reverse().map(l => {
+    const p = latest('lot', l.lot, 's6')?.data || {};
+    if(q && ![l.lot, p.product].join(' ').includes(q)) return '';
+    const sold = DB.records.filter(r => r.stage === 's7' && r.id === l.lot).reduce((n, r) => n + (+r.data.saleQty || 0), 0);
+    return `<div class="card item" onclick="showLot('${l.lot}')"><div><div class="id">${l.lot}</div><div class="muted">${esc(p.product || '（商品名まだ）')}／個体 ${esc(l.animals.join('・'))}</div><div class="muted">加工日 ${esc(p.procDate || '-')}・期限 ${esc(p.expiry || '-')}・製造 ${esc(p.qty || '-')}・販売 ${sold}</div></div><span class="muted">›</span></div>`;
+  }).join('');
+  $('#res').innerHTML = rows || '<p class="muted">見つかりません</p>';
+}
+function drawSales(){
+  const m = $('#m').value;
+  const rows = DB.records.filter(r => r.stage === 's7' && (!m || (r.data.saleDate || r.data.shipDate || '').startsWith(m))).slice().reverse().map(r => {
+    const p = latest('lot', r.id, 's6')?.data || {};
+    return `<div class="card item" onclick="showLot('${r.id}')"><div><div class="id">${esc(r.data.saleDate || r.data.shipDate || '日付なし')}</div><div class="muted">${esc(r.id)}　${esc(p.product || '')}</div><div class="muted">${esc(r.data.buyer || '')}・${esc(r.data.form || '')}・${esc(r.data.saleQty || r.data.shipQty || '-')}個</div></div><span class="muted">›</span></div>`;
+  }).join('');
+  $('#res').innerHTML = rows || '<p class="muted">この月の販売記録はありません</p>';
+}
+function kv(stage, d){
+  return `<div class="kv">` + stage.fields.filter(f => d[f.key]).map(f => `<div>${esc(f.label)}</div><div>${f.type === 'photo' ? `<img class="photo" src="${esc(d[f.key])}">` : esc(d[f.key])}</div>`).join('') + `</div>`;
+}
+function showAnimal(a){
+  let html = `<button class="back" onclick="go('list')">← 一覧へ</button><div class="card"><h2>${a} の記録</h2></div>`;
+  CFG.stages.filter(s => s.target === 'animal').forEach(s => {
+    const r = latest('animal', a, s.id);
+    html += `<div class="card"><b>${esc(s.no)}. ${esc(s.name)}</b>${r ? `<div class="muted">${esc(r.by)}・${esc(String(r.at).slice(0,10))}</div>` + kv(s, r.data) : '<div class="muted">まだ入力されていません</div>'}</div>`;
+  });
+  DB.lots.filter(l => l.animals.includes(a)).forEach(l => { html += `<div class="card item" onclick="showLot('${l.lot}')"><div><b>製造ロット ${l.lot}</b><div class="muted">${esc(latest('lot', l.lot, 's6')?.data.product || '')}</div></div><span class="muted">›</span></div>`; });
+  $('#main').innerHTML = html; window.scrollTo(0,0);
+}
+function showLot(lot){
+  const l = DB.lots.find(x => x.lot === lot) || {animals:[]};
+  const p = latest('lot', lot, 's6');
+  let html = `<button class="back" onclick="go('list')">← 一覧へ</button><div class="card"><h2>ロット ${esc(lot)}</h2><div class="muted">使った個体：${l.animals.map(a => `<a href="#" onclick="showAnimal('${a}');return false">${a}</a>`).join('・')}</div></div>`;
+  html += `<div class="card"><b>6. 加工・製造</b>${p ? kv(stageOf('s6'), p.data) : '<div class="muted">まだ入力されていません</div>'}</div>`;
+  const sales = DB.records.filter(r => r.stage === 's7' && r.id === lot);
+  html += `<div class="card"><b>7. 販売（${sales.length}件）</b>` + (sales.map(r => kv(stageOf('s7'), r.data)).join('<hr style="border:0;border-top:1px solid var(--line)">') || '<div class="muted">まだ販売記録はありません</div>') + `</div>`;
+  $('#main').innerHTML = html; window.scrollTo(0,0);
+}
+boot();
+</script>
+</body>
+</html>
