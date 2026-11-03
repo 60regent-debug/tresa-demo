@@ -105,6 +105,7 @@ const MOCK_CONFIG = {
       {key:'inDate', label:'導入日', type:'date'},
       {key:'inWeight', label:'導入時体重（kg）', type:'number'},
       {key:'inHealth', label:'飼養開始時の健康状態', type:'textarea'},
+      {key:'feed', label:'飼料・給餌内容', type:'textarea'},
       {key:'medic', label:'投薬・治療履歴', type:'textarea'},
       {key:'method', label:'飼養環境・飼育方法', type:'textarea'}
     ]},
@@ -151,7 +152,7 @@ function mockSeed(){
     animals:['A001','A002','A003'],
     records:[
       {target:'animal',id:'A001',stage:'s1',by:'捕獲担当',at:t,data:{sex:'オス',age:'3歳くらい',feature:'茶色・右角が短い',island:'中之島',spot:'（ダミー）',capDate:'2026-09-20',catcher:'捕獲担当',capHealth:'良好',outDate:'2026-09-25',outFromTo:'中之島 → 奄美（（牧場名））',receiver:'牧場担当'}},
-      {target:'animal',id:'A001',stage:'s3',by:'牧場担当',at:t,data:{farm:'（牧場名）・牧場担当',inDate:'2026-09-26',inWeight:'18',inHealth:'良好',medic:'なし',method:'放牧＋天然草'}},
+      {target:'animal',id:'A001',stage:'s3',by:'牧場担当',at:t,data:{farm:'（牧場名）・牧場担当',inDate:'2026-09-26',inWeight:'18',inHealth:'良好',feed:'島の野草・干し草',medic:'なし',method:'放牧＋天然草'}},
       {target:'animal',id:'A001',stage:'s4',by:'牧場担当',at:t,data:{shipWeight:'24',shipDate:'2026-10-28',plant:'（ダミー）食肉センター',carcass:'11',handler:'牧場担当'}},
       {target:'animal',id:'A001',stage:'s5',by:'牧場担当',at:t,data:{grade:'清級',storage:'冷凍 -20℃'}},
       {target:'animal',id:'A002',stage:'s1',by:'捕獲担当',at:t,data:{sex:'メス',island:'中之島',capDate:'2026-10-05',catcher:'捕獲担当',outDate:'2026-10-10',outFromTo:'中之島 → 奄美（（牧場名））'}},
