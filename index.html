@@ -68,17 +68,21 @@
   .modal .bar button.sub{background:var(--navy-soft);color:var(--navy)}
   #map{flex:1}
   .auto{background:var(--navy-soft)}
+  .stage:disabled{opacity:.45}
+  .who button{border:0;border-radius:6px;padding:3px 10px;font-size:13px;background:rgba(255,255,255,.2);color:#fff}
+  .who span{flex:1}
+  .link{background:none;border:0;color:var(--navy);font-size:13px;padding:0;margin-top:12px;text-decoration:underline}
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
 <body>
-<div class="demo" id="demoBar" style="display:none">見本版：入力した内容はこのスマホの中だけに保存されます（ほかの人には見えません）</div>
+<div class="demo" id="demoBar" style="display:none">見本版：入力した内容とパスワードはこのスマホの中だけに保存されます（ほかの人には見えません）</div>
 <header>
   <h1>トレサ記録</h1>
   <div class="brand" id="brand"></div>
-  <div class="who">入力する人 <select id="who"></select></div>
+  <div class="who" id="whoBar" style="display:none"><span id="whoName"></span><button onclick="logout()">ログアウト</button></div>
 </header>
-<nav>
+<nav id="nav" style="display:none">
   <button id="tabInput" class="on" onclick="go('input')">入力</button>
   <button id="tabList" onclick="go('list')">一覧</button>
   <button id="tabStaff" onclick="go('staff')">担当者</button>
@@ -101,7 +105,8 @@ const ISLANDS = [
   {name:'悪石島', code:'悪', tag:'', lat:29.46, lng:129.60},
   {name:'宝島', code:'宝', tag:'', lat:29.15, lng:129.21}
 ];
-const AGES = ['1歳','2歳','3歳','4歳','不明'];
+const AGES = ['1歳','2歳','3歳','4歳','5歳以上','不明'];
+const GRADE_BY_AGE = {'1歳':'清級','2歳':'清級','3歳':'香級','4歳':'香級','5歳以上':'等外'};
 /* auto：入力する人の登録情報などから自動で入る（あとで書き換えも可）
    name=担当者名／island・farm・plant・processor・seller=担当者の登録内容／fixed=決まった値 */
 const MOCK_CONFIG = {
@@ -110,7 +115,7 @@ const MOCK_CONFIG = {
     { id:'s1', no:'1・2', name:'捕獲・搬出', owner:'捕獲担当', target:'animal', fields:[
       {key:'photo', label:'個体の写真', type:'photo'},
       {key:'sex', label:'性別', type:'select', options:['オス','メス']},
-      {key:'age', label:'推定年齢', type:'select', options:AGES, hint:'不明のときは受入で歯の写真とダブルチェック。推定できなければ等外'},
+      {key:'age', label:'推定年齢', type:'select', options:AGES, hint:'1〜2歳＝清級／3〜4歳＝香級／5歳以上・推定不可＝等外（商品区分に自動で入ります）。不明のときは受入で歯の写真とダブルチェック'},
       {key:'feature', label:'毛色・身体的特徴', type:'textarea'},
       {key:'island', label:'捕獲地域（十島村内）', type:'island', auto:'island'},
       {key:'tag', label:'耳票の色', type:'text', auto:'tag'},
@@ -147,6 +152,7 @@ const MOCK_CONFIG = {
     ]},
     { id:'s5', no:'5', name:'精肉・品質', owner:'精肉担当', target:'animal', fields:[
       {key:'grade', label:'商品区分', type:'select', options:['香級','清級','等外'], auto:'grade'},
+      {key:'meatPlace', label:'精肉場', type:'text', auto:'meat'},
       {key:'storage', label:'熟成・保存条件', type:'textarea'},
       {key:'quality', label:'品質検査記録', type:'textarea'}
     ]},
@@ -155,7 +161,7 @@ const MOCK_CONFIG = {
       {key:'facility', label:'製造施設', type:'text', auto:'processor'},
       {key:'procDate', label:'加工日', type:'date'},
       {key:'product', label:'加工品名', type:'text', hint:'例：島ヤギ皮ジャーキー'},
-      {key:'rawQty', label:'原材料使用量', type:'text'},
+      {key:'rawQty', label:'原材料使用量（kg）', type:'number'},
       {key:'additives', label:'添加原材料・調味料', type:'textarea'},
       {key:'qty', label:'製造数量', type:'number'},
       {key:'expiry', label:'賞味期限・消費期限', type:'date'},
@@ -175,25 +181,41 @@ const MOCK_CONFIG = {
 };
 /* 担当者の登録項目 */
 const STAFF_FIELDS = [
-  {key:'name', label:'名前'}, {key:'island', label:'捕獲地域', type:'island'},
-  {key:'farm', label:'牧場名'}, {key:'plant', label:'屠畜場名'},
-  {key:'processor', label:'加工場名'}, {key:'seller', label:'販売元名'}
+  {key:'name', label:'氏名'}, {key:'phone', label:'電話番号（電話番号でログインするとき）'},
+  {key:'island', label:'捕獲地域（島名）', type:'island'}, {key:'farm', label:'管理牧場'},
+  {key:'plant', label:'利用屠畜場'}, {key:'meat', label:'精肉場'},
+  {key:'processor', label:'加工場'}, {key:'seller', label:'販売店'}
 ];
+/* 担当の種類：入力できる区分と、登録が必須の項目（氏名はすべて必須） */
+const ROLES = [
+  {key:'capture', label:'捕獲者', stages:['s1'], need:['island']},
+  {key:'receive', label:'受入者', stages:['s3'], need:['farm']},
+  {key:'process', label:'処理担当', stages:['s4','s5'], need:['plant','meat']},
+  {key:'make', label:'加工者', stages:['s6'], need:['processor']},
+  {key:'sell', label:'販売者', stages:['s7'], need:['seller']}
+];
+const fieldLabel = k => STAFF_FIELDS.find(f => f.key === k).label;
+const norm = v => String(v ?? '').replace(/[\s\u3000]/g, '');
+const digits = v => String(v ?? '').normalize('NFKC').replace(/\D/g, '');
+function findStaff(list, id){
+  const n = norm(id), d = digits(id);
+  return (list || []).find(s => norm(s.name) === n || (s.phone && d.length >= 9 && digits(s.phone) === d)) || null;
+}
 
 function mockSeed(){
   const t = '2026-11-03T10:00:00';
   const M = '美延 優志', S = '白石 聡';
   return {
     staff:[
-      {name:M, island:'中之島', farm:'', plant:'', processor:'', seller:''},
-      {name:S, island:'', farm:'サティ牧場', plant:'小湊屠畜場', processor:'らいおんの穴', seller:'らいおんのアナ'}
+      {name:M, roles:['capture'], phone:'', island:'中之島', farm:'', plant:'', meat:'', processor:'', seller:''},
+      {name:S, roles:['receive','process','make','sell'], phone:'', island:'', farm:'サティ牧場', plant:'小湊屠畜場', meat:'（仮）精肉場', processor:'らいおんの穴', seller:'らいおんのアナ'}
     ],
     animals:['中A001','中A002','中A003'],
     records:[
       {target:'animal',id:'中A001',stage:'s1',by:M,at:t,data:{sex:'オス',age:'3歳',feature:'茶色・右角が短い',island:'中之島',tag:'黄',spot:'29.8512, 129.8601',capDate:'2026-09-20',tickDrug:'（ダミー）',tickDate:'2026-09-21',catcher:M,capHealth:'良好',outDate:'2026-09-25',outFrom:'中之島',outTo:'奄美大島',receiver:S}},
       {target:'animal',id:'中A001',stage:'s3',by:S,at:t,data:{farm:'サティ牧場・'+S,inDate:'2026-09-26',inWeight:'18',inHealth:'良好',ageCheck:'3歳',feed:'島の野草・干し草',medic:'なし',method:'放牧＋天然草'}},
       {target:'animal',id:'中A001',stage:'s4',by:S,at:t,data:{shipWeight:'24',shipDate:'2026-10-28',plant:'小湊屠畜場',carcass:'11',handler:S}},
-      {target:'animal',id:'中A001',stage:'s5',by:S,at:t,data:{grade:'清級',storage:'冷凍 -20℃'}},
+      {target:'animal',id:'中A001',stage:'s5',by:S,at:t,data:{grade:'香級',meatPlace:'（仮）精肉場',storage:'冷凍 -20℃'}},
       {target:'animal',id:'中A002',stage:'s1',by:M,at:t,data:{sex:'メス',age:'不明',island:'中之島',tag:'黄',capDate:'2026-10-05',catcher:M,outDate:'2026-10-10',outFrom:'中之島',outTo:'奄美大島',receiver:S}},
       {target:'animal',id:'中A002',stage:'s3',by:S,at:t,data:{farm:'サティ牧場・'+S,inDate:'2026-10-11',inWeight:'15',ageCheck:'不明'}},
       {target:'animal',id:'中A003',stage:'s1',by:M,at:t,data:{sex:'オス',age:'2歳',island:'中之島',tag:'黄',capDate:'2026-10-30'}},
@@ -203,9 +225,15 @@ function mockSeed(){
     lots:[{lot:'中A001-1',animals:['中A001'],at:t}]
   };
 }
-const MOCK_KEY = 'tresa_mock_v2', WHO_KEY = 'tresa_who_v2';
+const MOCK_KEY = 'tresa_mock_v3', PW_KEY = 'tresa_pw_v1', SESSION_KEY = 'tresa_session_v1';
 function mockLoad(){ try{ const s = localStorage.getItem(MOCK_KEY); if(s) return JSON.parse(s); }catch(e){} return mockSeed(); }
 function mockSave(db){ try{ localStorage.setItem(MOCK_KEY, JSON.stringify(db)); }catch(e){} }
+function pwLoad(){ try{ return JSON.parse(localStorage.getItem(PW_KEY)) || {}; }catch(e){ return {}; } }
+function pwSave(m){ try{ localStorage.setItem(PW_KEY, JSON.stringify(m)); }catch(e){} }
+async function sha(text){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('');
+}
 
 const api = {
   call(fn, ...args){
@@ -215,27 +243,42 @@ const api = {
     return Promise.resolve(mock[fn](...args));
   }
 };
+/* お試し用：Code.gs と同じ呼び方。見本版はそのスマホの中だけで動く（token は名前そのもの） */
 const mock = {
   getConfig(){ return MOCK_CONFIG; },
   getAll(){ return mockLoad(); },
-  addAnimal(id){ const db = mockLoad(); if(!db.animals.includes(id)) db.animals.push(id); mockSave(db); return id; },
-  saveRecord(rec){ const db = mockLoad(); rec.at = new Date().toISOString(); db.records.push(rec); mockSave(db); return true; },
-  saveStaff(list){ const db = mockLoad(); db.staff = list; mockSave(db); return true; },
-  createLot(animals){ const db = mockLoad(); const base = animals[0];
+  async login(id, pw){
+    const s = findStaff(mockLoad().staff, id); if(!s) return {error:'登録されていない氏名・電話番号です'};
+    const m = pwLoad(); if(!m[s.name]) return {setup:true, name:s.name};
+    return m[s.name] === await sha(s.name + '|' + pw) ? {name:s.name, token:s.name} : {error:'パスワードが違います'};
+  },
+  async setPassword(id, pw){
+    const s = findStaff(mockLoad().staff, id); if(!s) return {error:'登録されていない氏名・電話番号です'};
+    const m = pwLoad(); if(m[s.name]) return {error:'パスワードは設定済みです'};
+    m[s.name] = await sha(s.name + '|' + pw); pwSave(m); return {name:s.name, token:s.name};
+  },
+  resetPassword(id){ const s = findStaff(mockLoad().staff, id); if(!s) return false; const m = pwLoad(); delete m[s.name]; pwSave(m); return true; },
+  logout(){ return true; },
+  addAnimal(token, id){ const db = mockLoad(); if(!db.animals.includes(id)) db.animals.push(id); mockSave(db); return id; },
+  saveRecord(token, rec){ const db = mockLoad(); rec.by = token; rec.at = new Date().toISOString(); db.records.push(rec); mockSave(db); return true; },
+  saveStaffOne(token, s, isNew){ const db = mockLoad(); const i = db.staff.findIndex(x => x.name === s.name);
+    if(isNew){ if(i >= 0) throw new Error('同じ氏名の担当者がいます'); db.staff.push(s); }
+    else { if(s.name !== token || i < 0) throw new Error('本人の情報だけ編集できます'); db.staff[i] = s; }
+    mockSave(db); return true; },
+  createLot(token, animals){ const db = mockLoad(); const base = animals[0];
     const n = db.lots.filter(l => l.lot.startsWith(base + '-')).length + 1;
-    const lot = base + '-' + n; db.lots.push({lot, animals, at:new Date().toISOString()}); mockSave(db); return lot; },
-  reset(){ try{ localStorage.removeItem(MOCK_KEY); }catch(e){} return true; }
+    const lot = base + '-' + n; db.lots.push({lot, animals, at:new Date().toISOString()}); mockSave(db); return lot; }
 };
 
 /* ===================== 画面 ===================== */
-let CFG = null, DB = null, VIEW = 'input', LISTMODE = 'animal';
+let CFG = null, DB = null, VIEW = 'input', LISTMODE = 'animal', USER = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 1800); }
 const stageOf = id => CFG.stages.find(s => s.id === id);
 const islandOf = name => ISLANDS.find(i => i.name === name);
 const islandByCode = code => ISLANDS.find(i => i.code === code);
-const me = () => (DB.staff || []).find(s => s.name === $('#who').value) || null;
+const me = () => (DB?.staff || []).find(s => s.name === USER?.name) || null;
 
 function latest(target, id, stage){
   const rs = DB.records.filter(r => r.target === target && r.id === id && r.stage === stage);
@@ -256,19 +299,74 @@ function ageUnknown(a){
   return !known(s3.ageCheck) && !known(s1.age) && (s1.age === '不明' || s3.ageCheck === '不明');
 }
 
+// 等級に使う年齢：受入時のダブルチェックを優先し、なければ捕獲時の推定年齢
+function ageBest(a){
+  const s1 = latest('animal', a, 's1')?.data || {}, s3 = latest('animal', a, 's3')?.data || {};
+  const known = v => v && v !== '不明';
+  return known(s3.ageCheck) ? s3.ageCheck : known(s1.age) ? s1.age : '';
+}
+function gradeOf(a){ return ageUnknown(a) ? '等外' : (GRADE_BY_AGE[ageBest(a)] || ''); }
+
 async function boot(){
   if(!IS_GAS) $('#demoBar').style.display = 'block';
   CFG = await api.call('getConfig');
-  DB = clean(await api.call('getAll'));
   $('#brand').textContent = CFG.appName;
-  drawWho();
-  $('#who').onchange = e => { try{ localStorage.setItem(WHO_KEY, e.target.value); }catch(_){} };
+  let saved = null; try{ saved = JSON.parse(localStorage.getItem(SESSION_KEY)); }catch(e){}
+  if(saved && saved.token){ USER = saved; try{ await enter(); return; }catch(e){ USER = null; } }
+  showLogin();
+}
+async function enter(){
+  DB = clean(await api.call('getAll', USER.token));
+  if(!me()) throw new Error('no staff');
+  $('#whoName').textContent = USER.name + ' でログイン中';
+  $('#whoBar').style.display = 'flex'; $('#nav').style.display = 'flex';
   go('input');
 }
-function drawWho(){
-  let saved = ''; try{ saved = localStorage.getItem(WHO_KEY) || ''; }catch(e){}
-  if($('#who').value) saved = $('#who').value;
-  $('#who').innerHTML = '<option value="">選んでください</option>' + (DB.staff || []).map(s => `<option ${s.name===saved?'selected':''}>${esc(s.name)}</option>`).join('');
+function loggedOut(){
+  USER = null; DB = null; try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
+  $('#whoBar').style.display = 'none'; $('#nav').style.display = 'none';
+  showLogin();
+}
+async function logout(){ const t = USER?.token; loggedOut(); try{ await api.call('logout', t); }catch(e){} }
+function showLogin(){
+  $('#main').innerHTML = `<div class="card"><h2>ログイン</h2><p class="muted">氏名または電話番号と、パスワードを入れてください。初めての人は、ここで自分のパスワードを決めます。</p>
+    <form onsubmit="doLogin(event)"><label>氏名または電話番号</label><input id="lid" name="username" autocomplete="username" required>
+    <label>パスワード</label><input id="lpw" type="password" name="password" autocomplete="current-password" required>
+    <div class="checks"><label><input type="checkbox" id="lsave" checked> このスマホに保存する（次回からログインなし）</label></div>
+    <button class="btn">ログイン</button></form>${IS_GAS ? '' : '<button class="link" onclick="forgotPw()">パスワードを忘れた（見本版のみ：決め直せます）</button>'}</div>`;
+}
+function finishLogin(r, save){
+  USER = {name:r.name, token:r.token};
+  if(save){ try{ localStorage.setItem(SESSION_KEY, JSON.stringify(USER)); }catch(e){} }
+  return enter().then(() => toast(r.name + ' でログインしました'));
+}
+async function doLogin(e){
+  e.preventDefault();
+  const id = $('#lid').value.trim(), pw = $('#lpw').value, save = $('#lsave').checked;
+  const r = await api.call('login', id, pw, save);
+  if(r.error){ toast(r.error); return; }
+  if(r.setup){ showSetPw(r.name, save); return; }
+  await finishLogin(r, save);
+}
+function showSetPw(name, save){
+  $('#main').innerHTML = `<div class="card"><h2>パスワードを決める</h2><p class="muted">${esc(name)} さんのパスワードはまだありません。6文字以上で決めてください。</p>
+    <form onsubmit="doSetPw(event, ${save ? 'true' : 'false'})"><input type="text" id="sid" name="username" autocomplete="username" value="${esc(name)}" readonly>
+    <label>新しいパスワード</label><input id="spw" type="password" name="new-password" autocomplete="new-password" required>
+    <label>もう一度</label><input id="spw2" type="password" autocomplete="new-password" required>
+    <button class="btn">決定</button></form><button class="link" onclick="showLogin()">← 戻る</button></div>`;
+}
+async function doSetPw(e, save){
+  e.preventDefault();
+  const pw = $('#spw').value;
+  if(pw.length < 6){ toast('6文字以上にしてください'); return; }
+  if(pw !== $('#spw2').value){ toast('2回の入力が違います'); return; }
+  const r = await api.call('setPassword', $('#sid').value, pw, save);
+  if(r.error){ toast(r.error); return; }
+  await finishLogin(r, save);
+}
+async function forgotPw(){
+  const id = $('#lid').value.trim(); if(!id){ toast('先に氏名か電話番号を入れてください'); return; }
+  toast(await api.call('resetPassword', id) ? '次のログインで決め直せます' : '登録されていない氏名・電話番号です');
 }
 // 番号は決まった形（中A001／中A001-1）だけを通す（画面にそのまま埋め込むため）
 const ID_OK = /^[口中平諏悪宝][A-Z]\d{3}(-\d+)?$/;
@@ -279,8 +377,15 @@ function clean(db){
   db.records = (db.records || []).filter(r => ID_OK.test(r.id) && /^s\d+$/.test(r.stage));
   return db;
 }
-async function refresh(){ DB = clean(await api.call('getAll')); }
-function who(){ const w = $('#who').value; if(!w){ toast('上で「入力する人」を選んでください'); } return w; }
+async function refresh(){ DB = clean(await api.call('getAll', USER.token)); }
+// 区分に入力できない理由（入力できるときは空文字）
+function blockReason(stageId){
+  const r = ROLES.find(x => x.stages.includes(stageId)), p = me();
+  if(!p || !(p.roles || []).includes(r.key)) return r.label + 'の担当の人が入力します';
+  const miss = r.need.filter(k => !p[k]);
+  return miss.length ? '「担当者」タブで' + miss.map(fieldLabel).join('・') + 'を登録してください' : '';
+}
+function allowed(stageId){ const m = blockReason(stageId); if(m) toast(m); return !m; }
 
 function go(v){
   VIEW = v; ['input','list','staff'].forEach(k => $('#tab' + k[0].toUpperCase() + k.slice(1)).classList.toggle('on', v===k));
@@ -291,12 +396,13 @@ function go(v){
 /* ---- 入力 ---- */
 function showStages(){
   $('#main').innerHTML = `<p class="muted">自分の担当の区分を選んでください</p><div class="stages">` +
-    CFG.stages.map(s => `<button class="stage" onclick="pickTarget('${s.id}')"><span class="num">${esc(s.no)}</span><b>${esc(s.name)}</b><small>${esc(s.owner)}</small></button>`).join('') + `</div>`;
+    CFG.stages.map(s => { const m = blockReason(s.id); return `<button class="stage" ${m ? 'disabled' : ''} onclick="pickTarget('${s.id}')"><span class="num">${esc(s.no)}</span><b>${esc(s.name)}</b><small>${esc(m || s.owner)}</small></button>`; }).join('') + `</div>`;
 }
 function islandSelect(id, val, extra){
   return `<select id="${id}" ${extra || ''}><option value=""></option>` + ISLANDS.map(i => `<option ${i.name===val?'selected':''}>${i.name}</option>`).join('') + `</select>`;
 }
 function pickTarget(stageId){
+  if(!allowed(stageId)) return;
   const s = stageOf(stageId);
   let body = `<button class="back" onclick="go('input')">← 区分を選び直す</button><div class="card"><h2>${esc(s.no)}. ${esc(s.name)}</h2>`;
   if(s.target === 'animal'){
@@ -321,16 +427,16 @@ function drawNewBtn(){
   $('#newBtn').innerHTML = isl ? `<button class="btn sub" onclick="newAnimal()">＋ 新しい個体（${nextAnimalId(isl.code)}）を登録</button>` : '<p class="muted">島を選ぶと番号が決まります</p>';
 }
 async function newAnimal(){
-  if(!who()) return;
+  if(!allowed('s1')) return;
   const isl = islandOf($('#newIsland').value); if(!isl){ toast('捕獲地域を選んでください'); return; }
-  const id = nextAnimalId(isl.code); await api.call('addAnimal', id); await refresh();
+  const id = nextAnimalId(isl.code); await api.call('addAnimal', USER.token, id); await refresh();
   toast(id + ' を登録しました'); openForm('s1', id);
 }
 async function makeLot(){
-  if(!who()) return;
+  if(!allowed('s6')) return;
   const picked = [...document.querySelectorAll('.checks input:checked')].map(i => i.value);
   if(!picked.length){ toast('個体を選んでください'); return; }
-  const lot = await api.call('createLot', picked); await refresh();
+  const lot = await api.call('createLot', USER.token, picked); await refresh();
   toast('ロット ' + lot + ' を作りました'); openForm('s6', lot);
 }
 // 自動で入れる値（前回の入力がないときだけ使う）
@@ -344,8 +450,8 @@ function autoVal(f, id){
     case 'outFrom': return isl ? isl.name : '';
     case 'fixed': return f.value || '';
     case 'farm': return p.farm ? p.farm + '・' + p.name : '';
-    case 'plant': case 'processor': case 'seller': return p[f.auto] || '';
-    case 'grade': return ageUnknown(id) ? '等外' : '';
+    case 'plant': case 'meat': case 'processor': case 'seller': return p[f.auto] || '';
+    case 'grade': return gradeOf(id);
   }
   return '';
 }
@@ -369,12 +475,16 @@ function islandChanged(name){
 }
 function openForm(stageId, id){
   if(!id){ toast('番号を選んでください'); return; }
-  if(!$('#who').value) toast('「入力する人」を選ぶと、担当者の情報が自動で入ります');
   const s = stageOf(stageId);
   const target = s.target; const prev = latest(target, id, stageId);
   let extra = '';
   if(target === 'lot'){ const l = DB.lots.find(x => x.lot === id); extra = `<p class="muted">使った個体：${esc(l?.animals.join('・'))}</p>`; }
-  if(stageId === 's5' && ageUnknown(id)) extra = `<p class="note">年齢が推定できていない個体なので「等外」扱いです</p>`;
+  if(stageId === 's5'){
+    const g = gradeOf(id), saved = prev?.data.grade;
+    if(ageUnknown(id)) extra = `<p class="note">年齢が推定できていない個体なので「等外」扱いです</p>`;
+    else if(g && saved && saved !== g) extra = `<p class="note">推定年齢（${esc(ageBest(id))}）からは「${esc(g)}」です。保存済みの商品区分と違います</p>`;
+    else if(g) extra = `<p class="muted">推定年齢（${esc(ageBest(id))}）から「${esc(g)}」になります</p>`;
+  }
   const fields = s.fields.map(f => {
     const has = prev && prev.data[f.key] != null && prev.data[f.key] !== '';
     const val = has ? prev.data[f.key] : (f.auto ? autoVal(f, id) : '');
@@ -395,7 +505,7 @@ function readPhoto(file){
   });
 }
 async function saveForm(stageId, id){
-  const by = who(); if(!by) return;
+  if(!allowed(stageId)) return;
   const s = stageOf(stageId); const data = {};
   for(const el of document.querySelectorAll('[data-k]')){
     if(el.dataset.photo){ if(el.files[0]) data[el.dataset.k] = await readPhoto(el.files[0]); continue; }
@@ -403,7 +513,7 @@ async function saveForm(stageId, id){
   }
   if(data.spot && !GPS_OK.test(data.spot)){ toast('捕獲地点は「緯度, 経度」の形で入れてください'); return; }
   if(!Object.keys(data).length){ toast('何も入力されていません'); return; }
-  await api.call('saveRecord', {target: s.target, id, stage: stageId, by, data});
+  await api.call('saveRecord', USER.token, {target: s.target, id, stage: stageId, data});
   await refresh(); toast('保存しました'); go('input');
 }
 
@@ -439,25 +549,34 @@ async function gpsMap(key){
 }
 
 /* ---- 担当者 ---- */
+const rolesText = s => ROLES.filter(r => (s.roles || []).includes(r.key)).map(r => r.label).join('・') || '担当なし';
 function showStaff(){
   const list = DB.staff || [];
-  $('#main').innerHTML = `<p class="muted">担当者を登録しておくと、入力のときに捕獲地域・牧場名・屠畜場・加工場・販売元が自動で入ります。</p>` +
-    list.map((s, i) => `<div class="card item" onclick="editStaff(${i})"><div><div class="id" style="font-size:16px">${esc(s.name)}</div><div class="muted">${STAFF_FIELDS.slice(1).filter(f => s[f.key]).map(f => esc(f.label) + '：' + esc(s[f.key])).join('／') || '（登録内容なし）'}</div></div><span class="muted">›</span></div>`).join('') +
+  $('#main').innerHTML = `<p class="muted">担当ごとに必須の情報を登録すると、その区分に入力でき、入力のときに自動で入ります。編集できるのは本人の情報だけです。</p>` +
+    list.map((s, i) => { const mine = s.name === USER.name; return `<div class="card item" ${mine ? `onclick="editStaff(${i})"` : ''}><div><div class="id" style="font-size:16px">${esc(s.name)}${mine ? '（自分）' : ''}</div><div class="muted">${esc(rolesText(s))}</div><div class="muted">${STAFF_FIELDS.slice(2).filter(f => s[f.key]).map(f => esc(f.label) + '：' + esc(s[f.key])).join('／') || '（登録内容なし）'}</div></div>${mine ? '<span class="muted">›</span>' : ''}</div>`; }).join('') +
     `<button class="btn sub" onclick="editStaff(-1)">＋ 担当者を追加</button>`;
 }
 function editStaff(i){
   const s = i >= 0 ? DB.staff[i] : {};
   $('#main').innerHTML = `<button class="back" onclick="go('staff')">← 担当者一覧へ</button><div class="card"><h2>${i >= 0 ? '担当者の編集' : '担当者の追加'}</h2>` +
-    STAFF_FIELDS.map(f => `<label>${esc(f.label)}</label>` + (f.type === 'island' ? islandSelect('st_' + f.key, s[f.key] || '') : `<input id="st_${f.key}" value="${esc(s[f.key] || '')}">`)).join('') +
-    `<p class="muted">分からない所・関係ない所は空欄でOK</p><button class="btn" onclick="saveStaffForm(${i})">保存する</button></div>`;
+    `<label>担当（複数OK）</label><div class="checks" id="stRoles">` + ROLES.map(r => `<label><input type="checkbox" value="${r.key}" ${(s.roles || []).includes(r.key) ? 'checked' : ''}> ${esc(r.label)}（必須：氏名・${r.need.map(k => esc(fieldLabel(k))).join('・')}）</label>`).join('') + `</div>` +
+    STAFF_FIELDS.map(f => `<label>${esc(f.label)}</label>` + (f.type === 'island' ? islandSelect('st_' + f.key, s[f.key] || '') : `<input id="st_${f.key}" value="${esc(s[f.key] || '')}" ${f.key === 'name' && i >= 0 ? 'readonly' : ''} ${f.key === 'phone' ? 'inputmode="tel"' : ''}>`)).join('') +
+    `<p class="muted">担当に関係ない所は空欄でOK</p><button class="btn" onclick="saveStaffForm(${i})">保存する</button></div>`;
 }
 async function saveStaffForm(i){
   const s = {}; STAFF_FIELDS.forEach(f => s[f.key] = $('#st_' + f.key).value.trim());
-  if(!s.name){ toast('名前を入れてください'); return; }
-  const list = (DB.staff || []).slice();
-  if(list.some((x, j) => x.name === s.name && j !== i)){ toast('同じ名前の担当者がいます'); return; }
-  i >= 0 ? list[i] = s : list.push(s);
-  await api.call('saveStaff', list); await refresh(); drawWho(); toast('保存しました'); go('staff');
+  s.roles = [...document.querySelectorAll('#stRoles input:checked')].map(x => x.value);
+  if(!s.name){ toast('氏名を入れてください'); return; }
+  if(!s.roles.length){ toast('担当を選んでください'); return; }
+  for(const r of ROLES.filter(x => s.roles.includes(x.key))){
+    const miss = r.need.filter(k => !s[k]);
+    if(miss.length){ toast(r.label + 'は' + miss.map(fieldLabel).join('・') + 'が必須です'); return; }
+  }
+  const others = (DB.staff || []).filter((x, j) => j !== i);
+  if(others.some(x => norm(x.name) === norm(s.name))){ toast('同じ氏名の担当者がいます'); return; }
+  if(s.phone && others.some(x => x.phone && digits(x.phone) === digits(s.phone))){ toast('同じ電話番号の担当者がいます'); return; }
+  try{ await api.call('saveStaffOne', USER.token, s, i < 0); }catch(e){ toast(e.message || '保存できませんでした'); return; }
+  await refresh(); toast('保存しました'); go('staff');
 }
 
 /* ---- 一覧 ---- */
@@ -480,7 +599,7 @@ function drawAnimals(){
   const q = ($('#q').value || '').trim();
   const rows = DB.animals.slice().reverse().map(a => {
     const s1 = latest('animal', a, 's1')?.data || {};
-    const grade = ageUnknown(a) ? '等外' : latest('animal', a, 's5')?.data.grade;
+    const grade = ageUnknown(a) ? '等外' : (latest('animal', a, 's5')?.data.grade || gradeOf(a));
     const text = [a, s1.island, s1.sex, s1.age, s1.capDate, grade].join(' ');
     if(q && !text.includes(q)) return '';
     const chips = CFG.stages.filter(s => s.target === 'animal').map(s => `<span class="chip ${latest('animal', a, s.id) ? 'done' : ''}">${esc(s.name)}</span>`).join('');
