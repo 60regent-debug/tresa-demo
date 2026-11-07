@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>トレサ記録</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="トレサ記録">
+<meta name="theme-color" content="#2f5d3a">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<script>
+  var APP = 'https://script.google.com/macros/s/AKfycbzYOberL4ism8_tXnOxqbP55w3zgyWQmZ4OvXduFaShouOzNrJ98CVvIuRjPHYMedT-/exec';
+  // ホーム画面のアイコンから開いたときは、そのままアプリへ移動する
+  if (navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)) location.replace(APP);
+</script>
+<style>
+  :root { --bg:#f6f4ef; --ink:#1d2a3a; --sub:#5f6873; --green:#2f5d3a; --card:#fff; --line:#e2ded5; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14181e; --ink:#e8ecf1; --sub:#a4adb8; --card:#1d232b; --line:#2c343e; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,"Hiragino Sans",sans-serif; line-height:1.6; }
+  main { max-width:420px; margin:0 auto; padding:32px 16px; text-align:center; }
+  img { width:96px; height:96px; border-radius:22px; }
+  h1 { font-size:24px; margin:12px 0 20px; }
+  .open { display:block; background:var(--green); color:#fff; text-decoration:none; font-size:18px; font-weight:700; padding:16px; border-radius:12px; }
+  .how { text-align:left; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-top:20px; }
+  .how h2 { font-size:16px; margin:0 0 8px; }
+  .how ol { margin:0; padding-left:22px; }
+  .note { color:var(--sub); font-size:14px; margin:12px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <img src="apple-touch-icon.png" alt="">
+  <h1>トレサ記録</h1>
+  <a class="open" id="open" href="#">アプリを開く</a>
+  <section class="how">
+    <h2>最初に、ホーム画面に追加してください</h2>
+    <ol>
+      <li>Safariの共有ボタンを押す</li>
+      <li>「ホーム画面に追加」を押す</li>
+      <li>次からは、ヤギのアイコンから開けます</li>
+    </ol>
+    <p class="note">アプリの上に出る英語の注意書きは、Googleが自動で表示するものです。問題ありません。</p>
+  </section>
+</main>
+<script>document.getElementById('open').href = APP;</script>
+</body>
+</html>
