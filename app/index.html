@@ -14,8 +14,30 @@
 <link rel="manifest" href="manifest.json">
 <script>
   var APP = 'https://script.google.com/macros/s/AKfycbzYOberL4ism8_tXnOxqbP55w3zgyWQmZ4OvXduFaShouOzNrJ98CVvIuRjPHYMedT-/exec';
-  // ホーム画面のアイコンから開いたときは、そのままアプリへ移動する
-  if (navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)) location.replace(APP);
+  var KEY = 'tresa_session_v1';
+  var isHome = navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  // トレサの枠とログイン情報を受け渡す（ホーム画面のアプリでも残るよう、このページ側に保存する）
+  window.addEventListener('message', function (e) {
+    if (!/\.googleusercontent\.com$/.test(new URL(e.origin).hostname) || !e.data) return;
+    try {
+      if (e.data.type === 'tresa-get') {
+        var v = JSON.parse(localStorage.getItem(KEY) || 'null');
+        e.source.postMessage({ type: 'tresa-session', session: v }, e.origin);
+      } else if (e.data.type === 'tresa-set') {
+        localStorage.setItem(KEY, JSON.stringify(e.data.session));
+      } else if (e.data.type === 'tresa-clear') {
+        localStorage.removeItem(KEY);
+      }
+    } catch (err) {}
+  });
+  function openApp() {
+    var f = document.createElement('iframe');
+    f.src = APP; f.title = 'トレサ記録';
+    f.setAttribute('allow', 'geolocation *; camera *');
+    document.body.textContent = '';
+    document.body.appendChild(f);
+  }
+  if (isHome) document.addEventListener('DOMContentLoaded', openApp);
 </script>
 <style>
   :root { --bg:#f6f4ef; --ink:#1d2a3a; --sub:#5f6873; --green:#2f5d3a; --card:#fff; --line:#e2ded5; }
@@ -30,13 +52,14 @@
   .how h2 { font-size:16px; margin:0 0 8px; }
   .how ol { margin:0; padding-left:22px; }
   .note { color:var(--sub); font-size:14px; margin:12px 0 0; }
+  iframe { position:fixed; inset:0; width:100%; height:100%; border:0; }
 </style>
 </head>
 <body>
 <main>
   <img src="apple-touch-icon.png" alt="">
   <h1>トレサ記録</h1>
-  <a class="open" id="open" href="#">アプリを開く</a>
+  <a class="open" href="#" onclick="openApp();return false">アプリを開く</a>
   <section class="how">
     <h2>最初に、ホーム画面に追加してください</h2>
     <ol>
@@ -47,6 +70,5 @@
     <p class="note">アプリの上に出る英語の注意書きは、Googleが自動で表示するものです。問題ありません。</p>
   </section>
 </main>
-<script>document.getElementById('open').href = APP;</script>
 </body>
 </html>
